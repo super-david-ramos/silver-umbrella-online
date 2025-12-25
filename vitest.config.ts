@@ -5,8 +5,5 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.test.ts', '**/*.test.tsx'],
-    coverage: {
-      reporter: ['text', 'json', 'html'],
-    },
   },
 })
