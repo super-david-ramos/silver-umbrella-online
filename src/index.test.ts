@@ -1,4 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// Mock supabase before importing app
+vi.mock('./lib/supabase', () => ({
+  supabaseAdmin: {},
+  createSupabaseClient: vi.fn(() => ({
+    auth: { getUser: vi.fn() },
+    from: vi.fn()
+  }))
+}))
+
 import app from './index'
 
 describe('API health check', () => {
