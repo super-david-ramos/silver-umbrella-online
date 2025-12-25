@@ -2,6 +2,16 @@
 
 This project uses [Superpowers](https://github.com/obra/superpowers) - a complete software development workflow built on composable skills.
 
+## Submodule Setup
+
+The superpowers skills are included as a git submodule. At the start of each session:
+
+1. **Check if initialized:** `ls superpowers/skills/` - if empty, run step 2
+2. **Initialize:** `git submodule update --init --recursive`
+3. **Refresh periodically:** `git submodule update --remote --merge` (pulls latest updates)
+
+Do this automatically when skills files are missing - don't ask the user.
+
 ## Skills
 
 The following skills are available in `superpowers/skills/`. **Check for applicable skills BEFORE any response.**
