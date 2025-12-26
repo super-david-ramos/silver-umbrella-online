@@ -215,6 +215,65 @@ passkeys.post('/passkey/verify', async (c) => {
   return c.json({ verified: true, user: userData?.user })
 })
 
+// POST /auth/demo-user - Create a demo user for testing (development only)
+passkeys.post('/demo-user', async (c) => {
+  const { email } = await c.req.json()
+
+  if (!email) {
+    return c.json({ error: 'Email is required' }, 400)
+  }
+
+  // Check if user already exists
+  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
+  const existingUser = existingUsers?.users?.find((u) => u.email === email)
+
+  let user
+  if (existingUser) {
+    user = existingUser
+  } else {
+    // Create a new user in Supabase Auth
+    const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      email_confirm: true, // Auto-confirm for demo
+      user_metadata: { display_name: 'Demo User' },
+    })
+
+    if (error) {
+      return c.json({ error: error.message }, 400)
+    }
+    user = newUser.user
+  }
+
+  // Create a session token for the user
+  const issuedAt = Math.floor(Date.now() / 1000)
+  const expirationTime = issuedAt + 3600
+
+  const payload = {
+    iss: jwtIssuer,
+    sub: user.id,
+    aud: 'authenticated',
+    exp: expirationTime,
+    iat: issuedAt,
+    email: user.email,
+    phone: user.phone,
+    app_metadata: user.app_metadata || {},
+    user_metadata: user.user_metadata || {},
+    role: 'authenticated',
+    is_anonymous: false,
+  }
+
+  const accessToken = jwt.sign(payload, jwtSecret, {
+    algorithm: 'HS256',
+  })
+
+  return c.json({
+    user,
+    access_token: accessToken,
+    token_type: 'bearer',
+    expires_in: 3600,
+  }, 201)
+})
+
 // POST /auth/session - Create JWT session after passkey verification
 passkeys.post('/session', async (c) => {
   const userData = await c.req.json()
