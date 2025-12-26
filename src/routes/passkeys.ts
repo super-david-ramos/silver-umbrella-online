@@ -28,9 +28,23 @@ function getWebAuthnConfig(c: { req: { header: (name: string) => string | undefi
   const protocol = c.req.header('x-forwarded-proto') || 'http'
 
   const rpId = process.env.WEBAUTHN_RELYING_PARTY_ID || hostname
-  const origin = process.env.WEBAUTHN_RELYING_PARTY_ORIGIN || `${protocol}://${host}`
 
-  return { rpId, origin }
+  // For verification, we may need to accept both HTTP and HTTPS origins
+  // since proxy headers can be inconsistent
+  const envOrigin = process.env.WEBAUTHN_RELYING_PARTY_ORIGIN
+  if (envOrigin) {
+    return { rpId, origin: envOrigin }
+  }
+
+  const detectedOrigin = `${protocol}://${host}`
+  // Return array of possible origins for verification flexibility
+  const possibleOrigins = [
+    detectedOrigin,
+    `https://${host}`,
+    `http://${host}`,
+  ].filter((v, i, a) => a.indexOf(v) === i) // Remove duplicates
+
+  return { rpId, origin: detectedOrigin, possibleOrigins }
 }
 
 // ============================================
@@ -83,7 +97,10 @@ passkeys.post('/verify', async (c) => {
   const user = c.get('user')
   const supabase = c.get('supabase')
   const data = await c.req.json()
-  const { rpId, origin } = getWebAuthnConfig(c)
+  const config = getWebAuthnConfig(c)
+  const { rpId, possibleOrigins } = config
+  // Use possibleOrigins array if available, otherwise fall back to single origin
+  const expectedOrigin = possibleOrigins || config.origin
 
   // Get stored challenge
   const { data: challenge } = await supabase
@@ -100,11 +117,18 @@ passkeys.post('/verify', async (c) => {
   const verificationOpts: VerifyRegistrationResponseOpts = {
     response: data,
     expectedChallenge: challenge?.value || '',
-    expectedOrigin: origin,
+    expectedOrigin,
     expectedRPID: rpId,
   }
 
-  const verification = await verifyRegistrationResponse(verificationOpts)
+  let verification
+  try {
+    verification = await verifyRegistrationResponse(verificationOpts)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown verification error'
+    console.error('Registration verification error:', errorMessage, { rpId, expectedOrigin, expectedChallenge: challenge?.value ? '[present]' : '[missing]' })
+    return c.json({ error: `Verification failed: ${errorMessage}` }, 400)
+  }
 
   if (!verification.verified) {
     return c.json({ error: 'Verification failed' }, 400)
@@ -171,7 +195,10 @@ passkeys.post('/passkey', async (c) => {
 passkeys.post('/passkey/verify', async (c) => {
   const data = await c.req.json()
   const { challengeId } = data
-  const { rpId, origin } = getWebAuthnConfig(c)
+  const config = getWebAuthnConfig(c)
+  const { rpId, possibleOrigins } = config
+  // Use possibleOrigins array if available, otherwise fall back to single origin
+  const expectedOrigin = possibleOrigins || config.origin
 
   // Get stored challenge
   const { data: challenge } = await supabaseAdmin
@@ -199,7 +226,7 @@ passkeys.post('/passkey/verify', async (c) => {
   const verificationOpts: VerifyAuthenticationResponseOpts = {
     response: data,
     expectedChallenge: challenge?.value || '',
-    expectedOrigin: origin,
+    expectedOrigin,
     expectedRPID: rpId,
     credential: {
       id: credential.credential_id,
@@ -210,7 +237,14 @@ passkeys.post('/passkey/verify', async (c) => {
     requireUserVerification: false,
   }
 
-  const verification = await verifyAuthenticationResponse(verificationOpts)
+  let verification
+  try {
+    verification = await verifyAuthenticationResponse(verificationOpts)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown verification error'
+    console.error('Authentication verification error:', errorMessage, { rpId, expectedOrigin })
+    return c.json({ error: `Authentication failed: ${errorMessage}` }, 400)
+  }
 
   if (!verification.verified) {
     return c.json({ error: 'Authentication failed' }, 400)
