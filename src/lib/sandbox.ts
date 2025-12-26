@@ -21,11 +21,12 @@ export const SANDBOX_USER: User = {
  * Activates when:
  * - X-Sandbox-Mode: true header is present, OR
  * - ?sandbox=true query parameter is present
- * - AND NODE_ENV !== 'production'
+ * - AND (NODE_ENV !== 'production' OR ENABLE_SANDBOX === 'true')
  */
 export async function sandboxMiddleware(c: Context, next: Next) {
-  // Never allow sandbox mode in production
-  if (process.env.NODE_ENV === 'production') {
+  // Block sandbox mode in production unless explicitly enabled
+  const sandboxEnabled = process.env.ENABLE_SANDBOX === 'true'
+  if (process.env.NODE_ENV === 'production' && !sandboxEnabled) {
     await next()
     return
   }
