@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthContext } from './lib/auth-context'
 import { LoginPage } from './features/auth/LoginPage'
+import { AppShell } from './components/layout/AppShell'
+import { NoteList } from './features/notes/NoteList'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuthContext()
@@ -26,16 +28,18 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
-          path="/*"
+          path="/"
           element={
             <ProtectedRoute>
-              <div className="p-4">
-                <h1 className="text-xl font-bold">Notes App</h1>
-                <p className="text-muted-foreground">Logged in successfully!</p>
-              </div>
+              <AppShell />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route index element={<NoteList />} />
+          <Route path="note/:id" element={<div className="p-4">Note Editor (coming next)</div>} />
+          <Route path="search" element={<div className="p-4">Search (Phase 2)</div>} />
+          <Route path="settings" element={<div className="p-4">Settings (Phase 2)</div>} />
+        </Route>
       </Routes>
     </BrowserRouter>
   )
