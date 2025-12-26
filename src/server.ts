@@ -8,6 +8,9 @@ const server = new Hono()
 // Serve demo page
 server.use('/demo', serveStatic({ path: './public/demo.html' }))
 
+// Serve sandbox page
+server.use('/sandbox', serveStatic({ path: './public/sandbox.html' }))
+
 // Mount all routes from main app
 server.route('/', app)
 

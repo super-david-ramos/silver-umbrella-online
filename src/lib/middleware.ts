@@ -20,6 +20,9 @@ interface JwtPayload {
 export async function authMiddleware(c: Context, next: Next) {
   // Skip authentication if sandbox mode is active
   if (c.get('isSandbox') === true && c.get('user')) {
+    // Create a Supabase client for sandbox mode (without token)
+    const supabase = createSupabaseClient()
+    c.set('supabase', supabase)
     await next()
     return
   }
