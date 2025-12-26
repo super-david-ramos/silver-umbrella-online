@@ -3,6 +3,7 @@ import { useAuthContext } from './lib/auth-context'
 import { LoginPage } from './features/auth/LoginPage'
 import { AppShell } from './components/layout/AppShell'
 import { NoteList } from './features/notes/NoteList'
+import { NoteEditor } from './features/notes/NoteEditor'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuthContext()
@@ -36,7 +37,7 @@ function App() {
           }
         >
           <Route index element={<NoteList />} />
-          <Route path="note/:id" element={<div className="p-4">Note Editor (coming next)</div>} />
+          <Route path="note/:id" element={<NoteEditor />} />
           <Route path="search" element={<div className="p-4">Search (Phase 2)</div>} />
           <Route path="settings" element={<div className="p-4">Settings (Phase 2)</div>} />
         </Route>
