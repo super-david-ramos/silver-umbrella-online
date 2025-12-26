@@ -17,10 +17,21 @@ const passkeys = new Hono<{ Variables: Variables }>()
 
 // Environment variables for WebAuthn
 const rpName = process.env.WEBAUTHN_RELYING_PARTY_NAME || 'Notes App'
-const rpId = process.env.WEBAUTHN_RELYING_PARTY_ID || 'localhost'
-const origin = process.env.WEBAUTHN_RELYING_PARTY_ORIGIN || 'http://localhost:3000'
 const jwtSecret = process.env.SUPABASE_AUTH_JWT_SECRET || 'your-jwt-secret'
 const jwtIssuer = process.env.SUPABASE_AUTH_JWT_ISSUER || 'supabase'
+
+// Helper to get RP ID and origin from request (dynamic detection for deployment flexibility)
+function getWebAuthnConfig(c: { req: { header: (name: string) => string | undefined } }) {
+  // Use environment variables if set, otherwise detect from request
+  const host = c.req.header('host') || 'localhost:3000'
+  const hostname = host.split(':')[0] // Remove port if present
+  const protocol = c.req.header('x-forwarded-proto') || 'http'
+
+  const rpId = process.env.WEBAUTHN_RELYING_PARTY_ID || hostname
+  const origin = process.env.WEBAUTHN_RELYING_PARTY_ORIGIN || `${protocol}://${host}`
+
+  return { rpId, origin }
+}
 
 // ============================================
 // REGISTRATION ROUTES (require authenticated user)
@@ -30,6 +41,7 @@ const jwtIssuer = process.env.SUPABASE_AUTH_JWT_ISSUER || 'supabase'
 passkeys.post('/challenge', async (c) => {
   const user = c.get('user')
   const supabase = c.get('supabase')
+  const { rpId } = getWebAuthnConfig(c)
 
   // Get existing credentials for this user (to exclude from registration)
   const { data: credentials } = await supabase
@@ -71,6 +83,7 @@ passkeys.post('/verify', async (c) => {
   const user = c.get('user')
   const supabase = c.get('supabase')
   const data = await c.req.json()
+  const { rpId, origin } = getWebAuthnConfig(c)
 
   // Get stored challenge
   const { data: challenge } = await supabase
@@ -136,6 +149,8 @@ passkeys.post('/verify', async (c) => {
 
 // POST /auth/passkey - Start passkey authentication
 passkeys.post('/passkey', async (c) => {
+  const { rpId } = getWebAuthnConfig(c)
+
   const options = await generateAuthenticationOptions({
     rpID: rpId,
     userVerification: 'preferred',
@@ -156,6 +171,7 @@ passkeys.post('/passkey', async (c) => {
 passkeys.post('/passkey/verify', async (c) => {
   const data = await c.req.json()
   const { challengeId } = data
+  const { rpId, origin } = getWebAuthnConfig(c)
 
   // Get stored challenge
   const { data: challenge } = await supabaseAdmin
