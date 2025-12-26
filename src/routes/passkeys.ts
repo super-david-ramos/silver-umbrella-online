@@ -20,15 +20,34 @@ const rpName = process.env.WEBAUTHN_RELYING_PARTY_NAME || 'Notes App'
 const jwtSecret = process.env.SUPABASE_AUTH_JWT_SECRET || 'your-jwt-secret'
 const jwtIssuer = process.env.SUPABASE_AUTH_JWT_ISSUER || 'supabase'
 
-// Helper to get RP ID and origin from request (dynamic detection for deployment flexibility)
+// WebAuthn configuration - following reference implementation pattern
+// Environment variables are the ONLY reliable source for RP ID and origin
+// Dynamic detection from headers is unreliable due to proxy inconsistencies
 function getWebAuthnConfig(c: { req: { header: (name: string) => string | undefined } }) {
-  // Use environment variables if set, otherwise detect from request
+  const envRpId = process.env.WEBAUTHN_RELYING_PARTY_ID
+  const envOrigin = process.env.WEBAUTHN_RELYING_PARTY_ORIGIN
+
+  // If both env vars are set, use them (recommended for production)
+  if (envRpId && envOrigin) {
+    return { rpId: envRpId, origin: envOrigin }
+  }
+
+  // Fallback: detect from request headers (development only)
+  // WARNING: This can cause verification failures if headers are inconsistent between requests
   const host = c.req.header('host') || 'localhost:3000'
-  const hostname = host.split(':')[0] // Remove port if present
+  const hostname = host.split(':')[0]
   const protocol = c.req.header('x-forwarded-proto') || 'http'
 
-  const rpId = process.env.WEBAUTHN_RELYING_PARTY_ID || hostname
-  const origin = process.env.WEBAUTHN_RELYING_PARTY_ORIGIN || `${protocol}://${host}`
+  const rpId = envRpId || hostname
+  const origin = envOrigin || `${protocol}://${host}`
+
+  // Log warning when falling back to dynamic detection
+  if (!envRpId || !envOrigin) {
+    console.warn(
+      'WebAuthn: Using dynamic origin detection. Set WEBAUTHN_RELYING_PARTY_ID and WEBAUTHN_RELYING_PARTY_ORIGIN env vars for production.',
+      { detectedRpId: rpId, detectedOrigin: origin }
+    )
+  }
 
   return { rpId, origin }
 }
@@ -104,7 +123,14 @@ passkeys.post('/verify', async (c) => {
     expectedRPID: rpId,
   }
 
-  const verification = await verifyRegistrationResponse(verificationOpts)
+  let verification
+  try {
+    verification = await verifyRegistrationResponse(verificationOpts)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown verification error'
+    console.error('Registration verification error:', errorMessage, { rpId, origin, expectedChallenge: challenge?.value ? '[present]' : '[missing]' })
+    return c.json({ error: `Verification failed: ${errorMessage}` }, 400)
+  }
 
   if (!verification.verified) {
     return c.json({ error: 'Verification failed' }, 400)
@@ -210,7 +236,14 @@ passkeys.post('/passkey/verify', async (c) => {
     requireUserVerification: false,
   }
 
-  const verification = await verifyAuthenticationResponse(verificationOpts)
+  let verification
+  try {
+    verification = await verifyAuthenticationResponse(verificationOpts)
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown verification error'
+    console.error('Authentication verification error:', errorMessage, { rpId, origin })
+    return c.json({ error: `Authentication failed: ${errorMessage}` }, 400)
+  }
 
   if (!verification.verified) {
     return c.json({ error: 'Authentication failed' }, 400)
