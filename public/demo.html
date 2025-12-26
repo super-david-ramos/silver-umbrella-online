@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Passkey Authentication Demo</title>
+  <script src="https://unpkg.com/@simplewebauthn/browser@13.1.0/dist/bundle/index.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: #f5f5f5;
+    }
+    h1 { color: #333; }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card h2 { margin-top: 0; color: #555; }
+    button {
+      background: #4F46E5;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    button:hover { background: #4338CA; }
+    button:disabled { background: #9CA3AF; cursor: not-allowed; }
+    button.secondary {
+      background: #6B7280;
+    }
+    button.secondary:hover { background: #4B5563; }
+    .status {
+      padding: 1rem;
+      border-radius: 6px;
+      margin-top: 1rem;
+      font-family: monospace;
+      font-size: 0.875rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .status.success { background: #D1FAE5; color: #065F46; }
+    .status.error { background: #FEE2E2; color: #991B1B; }
+    .status.info { background: #DBEAFE; color: #1E40AF; }
+    .hidden { display: none; }
+    input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+    .user-info {
+      background: #F0FDF4;
+      padding: 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+    .token-display {
+      background: #1F2937;
+      color: #10B981;
+      padding: 1rem;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      overflow-x: auto;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Passkey Authentication Demo</h1>
+
+  <!-- Step 1: Mock User Setup (since we don't have real Supabase auth in demo) -->
+  <div class="card" id="setup-card">
+    <h2>Step 1: Demo Setup</h2>
+    <p>This demo simulates the passkey flow. In production, users would first authenticate via email/password or magic link before registering a passkey.</p>
+    <input type="text" id="demo-user-id" placeholder="Demo User ID (e.g., user-123)" value="demo-user-001">
+    <input type="email" id="demo-email" placeholder="Demo Email" value="demo@example.com">
+    <button onclick="setupDemoUser()">Initialize Demo User</button>
+    <div id="setup-status" class="status hidden"></div>
+  </div>
+
+  <!-- Step 2: Register Passkey -->
+  <div class="card" id="register-card">
+    <h2>Step 2: Register Passkey</h2>
+    <p>Register a new passkey for the demo user. This requires an authenticated session.</p>
+    <button onclick="registerPasskey()" id="register-btn" disabled>Register Passkey</button>
+    <div id="register-status" class="status hidden"></div>
+  </div>
+
+  <!-- Step 3: Sign In with Passkey -->
+  <div class="card" id="signin-card">
+    <h2>Step 3: Sign In with Passkey</h2>
+    <p>Sign in using a registered passkey. This creates a new JWT session.</p>
+    <button onclick="signInWithPasskey()" id="signin-btn">Sign In with Passkey</button>
+    <div id="signin-status" class="status hidden"></div>
+  </div>
+
+  <!-- Session Info -->
+  <div class="card" id="session-card" class="hidden">
+    <h2>Session Info</h2>
+    <div id="session-info"></div>
+  </div>
+
+  <!-- Debug Log -->
+  <div class="card">
+    <h2>Debug Log</h2>
+    <button class="secondary" onclick="clearLog()">Clear Log</button>
+    <div id="debug-log" class="status info" style="min-height: 100px;"></div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+    let demoToken = null;
+    let currentUser = null;
+
+    function log(message, type = 'info') {
+      const logEl = document.getElementById('debug-log');
+      const timestamp = new Date().toLocaleTimeString();
+      logEl.textContent += `[${timestamp}] ${message}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(message);
+    }
+
+    function clearLog() {
+      document.getElementById('debug-log').textContent = '';
+    }
+
+    function showStatus(elementId, message, type) {
+      const el = document.getElementById(elementId);
+      el.className = `status ${type}`;
+      el.textContent = typeof message === 'object' ? JSON.stringify(message, null, 2) : message;
+      el.classList.remove('hidden');
+    }
+
+    async function setupDemoUser() {
+      const userId = document.getElementById('demo-user-id').value;
+      const email = document.getElementById('demo-email').value;
+
+      if (!userId || !email) {
+        showStatus('setup-status', 'Please enter User ID and Email', 'error');
+        return;
+      }
+
+      currentUser = { id: userId, email: email, user_metadata: { display_name: 'Demo User' } };
+
+      // Create a demo JWT token (in production, this would come from Supabase auth)
+      // For demo purposes, we'll call the session endpoint to get a token
+      try {
+        log(`Setting up demo user: ${userId} (${email})`);
+
+        const response = await fetch(`${API_BASE}/auth/session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentUser)
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          demoToken = data.access_token;
+          log(`Demo token created: ${demoToken.substring(0, 50)}...`);
+          showStatus('setup-status', `Demo user initialized!\nToken: ${demoToken.substring(0, 50)}...`, 'success');
+          document.getElementById('register-btn').disabled = false;
+        } else {
+          throw new Error(data.error || 'Failed to create session');
+        }
+      } catch (error) {
+        log(`Setup error: ${error.message}`, 'error');
+        showStatus('setup-status', `Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function registerPasskey() {
+      if (!demoToken) {
+        showStatus('register-status', 'Please set up demo user first', 'error');
+        return;
+      }
+
+      try {
+        log('Starting passkey registration...');
+
+        // Step 1: Get registration options
+        log('Fetching registration options...');
+        const optionsResponse = await fetch(`${API_BASE}/passkeys/challenge`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${demoToken}`
+          }
+        });
+
+        if (!optionsResponse.ok) {
+          const error = await optionsResponse.json();
+          throw new Error(error.error || `Failed to get options: ${optionsResponse.status}`);
+        }
+
+        const options = await optionsResponse.json();
+        log(`Registration options received: ${JSON.stringify(options).substring(0, 100)}...`);
+
+        // Step 2: Create credential using WebAuthn API
+        log('Calling WebAuthn startRegistration...');
+        const credential = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
+        log(`Credential created: ${JSON.stringify(credential).substring(0, 100)}...`);
+
+        // Step 3: Verify registration
+        log('Verifying registration with server...');
+        const verifyResponse = await fetch(`${API_BASE}/passkeys/verify`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${demoToken}`
+          },
+          body: JSON.stringify(credential)
+        });
+
+        const verifyData = await verifyResponse.json();
+
+        if (verifyResponse.ok) {
+          log('Passkey registered successfully!');
+          showStatus('register-status', `Passkey registered!\n${JSON.stringify(verifyData, null, 2)}`, 'success');
+        } else {
+          throw new Error(verifyData.error || 'Verification failed');
+        }
+      } catch (error) {
+        log(`Registration error: ${error.message}`, 'error');
+        showStatus('register-status', `Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function signInWithPasskey() {
+      try {
+        log('Starting passkey authentication...');
+
+        // Step 1: Get authentication options
+        log('Fetching authentication options...');
+        const optionsResponse = await fetch(`${API_BASE}/auth/passkey`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!optionsResponse.ok) {
+          const error = await optionsResponse.json();
+          throw new Error(error.error || `Failed to get options: ${optionsResponse.status}`);
+        }
+
+        const options = await optionsResponse.json();
+        const { challengeId, ...webauthnOptions } = options;
+        log(`Authentication options received, challengeId: ${challengeId}`);
+
+        // Step 2: Authenticate using WebAuthn API
+        log('Calling WebAuthn startAuthentication...');
+        const credential = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: webauthnOptions });
+        log(`Authentication response created: ${JSON.stringify(credential).substring(0, 100)}...`);
+
+        // Step 3: Verify authentication
+        log('Verifying authentication with server...');
+        const verifyResponse = await fetch(`${API_BASE}/auth/passkey/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...credential, challengeId })
+        });
+
+        const verifyData = await verifyResponse.json();
+
+        if (!verifyResponse.ok) {
+          throw new Error(verifyData.error || 'Authentication failed');
+        }
+
+        log('Authentication verified, creating session...');
+
+        // Step 4: Create session token
+        const sessionResponse = await fetch(`${API_BASE}/auth/session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(verifyData.user)
+        });
+
+        const sessionData = await sessionResponse.json();
+
+        if (sessionResponse.ok) {
+          log('Session created successfully!');
+          showStatus('signin-status', `Signed in successfully!\nUser: ${verifyData.user?.email}`, 'success');
+
+          // Show session info
+          document.getElementById('session-card').classList.remove('hidden');
+          document.getElementById('session-info').innerHTML = `
+            <div class="user-info">
+              <strong>User ID:</strong> ${verifyData.user?.id}<br>
+              <strong>Email:</strong> ${verifyData.user?.email}
+            </div>
+            <strong>Access Token:</strong>
+            <div class="token-display">${sessionData.access_token}</div>
+          `;
+        } else {
+          throw new Error(sessionData.error || 'Failed to create session');
+        }
+      } catch (error) {
+        log(`Sign-in error: ${error.message}`, 'error');
+        showStatus('signin-status', `Error: ${error.message}`, 'error');
+      }
+    }
+
+    // Initialize
+    log('Passkey demo loaded');
+    log('Note: This demo requires a browser that supports WebAuthn (most modern browsers)');
+  </script>
+</body>
+</html>

@@ -4,7 +4,7 @@
   "scripts": {
     "test": "vitest",
     "test:run": "vitest run",
-    "dev:api": "bun run --hot src/index.ts"
+    "dev:api": "bun run --hot src/server.ts"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
