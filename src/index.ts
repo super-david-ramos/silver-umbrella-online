@@ -4,6 +4,7 @@ import notes from './routes/notes'
 import blocks from './routes/blocks'
 import passkeys from './routes/passkeys'
 import { authMiddleware } from './lib/middleware'
+import { sandboxMiddleware } from './lib/sandbox'
 
 const app = new Hono()
 
@@ -20,8 +21,8 @@ app.get('/', (c) => c.json({ status: 'ok', version: '1.0.0' }))
 app.route('/api/auth', passkeys)
 
 // Protected routes (require authentication)
-app.use('/api/notes/*', authMiddleware)
-app.use('/api/blocks/*', authMiddleware)
+app.use('/api/notes/*', sandboxMiddleware, authMiddleware)
+app.use('/api/blocks/*', sandboxMiddleware, authMiddleware)
 app.use('/api/passkeys/*', authMiddleware)
 
 app.route('/api/notes', notes)

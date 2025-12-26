@@ -18,6 +18,12 @@ interface JwtPayload {
 }
 
 export async function authMiddleware(c: Context, next: Next) {
+  // Skip authentication if sandbox mode is active
+  if (c.get('isSandbox') === true && c.get('user')) {
+    await next()
+    return
+  }
+
   const authHeader = c.req.header('Authorization')
 
   if (!authHeader?.startsWith('Bearer ')) {
