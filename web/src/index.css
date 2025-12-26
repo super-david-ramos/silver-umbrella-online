@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Prevent iOS zoom on input focus */
+input, textarea, select {
+  font-size: 16px;
+}
+
+/* Dynamic viewport height */
+.h-screen-safe {
+  height: 100dvh;
+}
+
+/* Safe area padding */
+.safe-area-inset {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
