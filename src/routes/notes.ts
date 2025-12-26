@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { authMiddleware } from '../lib/middleware'
 import type { Variables } from '../types/hono'
+import { SANDBOX_WORKSPACE_ID } from '../lib/sandbox'
 
 const createNoteSchema = z.object({
   title: z.string().optional().default('Untitled'),
@@ -23,21 +24,29 @@ notes.use('*', authMiddleware)
 notes.get('/', async (c) => {
   const supabase = c.get('supabase')
   const user = c.get('user')
+  const isSandbox = c.get('isSandbox')
 
-  const { data: membership } = await supabase
-    .from('workspace_members')
-    .select('workspace_id')
-    .eq('user_id', user.id)
-    .single()
+  // In sandbox mode, use the sandbox workspace directly
+  let workspaceId: string
+  if (isSandbox) {
+    workspaceId = SANDBOX_WORKSPACE_ID
+  } else {
+    const { data: membership } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
+      .eq('user_id', user.id)
+      .single()
 
-  if (!membership) {
-    return c.json({ error: 'No workspace found' }, 404)
+    if (!membership) {
+      return c.json({ error: 'No workspace found' }, 404)
+    }
+    workspaceId = membership.workspace_id
   }
 
   const { data: notesList, error } = await supabase
     .from('notes')
     .select('*')
-    .eq('workspace_id', membership.workspace_id)
+    .eq('workspace_id', workspaceId)
     .order('updated_at', { ascending: false })
 
   if (error) {
@@ -80,21 +89,29 @@ notes.post('/', zValidator('json', createNoteSchema), async (c) => {
   const supabase = c.get('supabase')
   const user = c.get('user')
   const body = c.req.valid('json')
+  const isSandbox = c.get('isSandbox')
 
-  const { data: membership } = await supabase
-    .from('workspace_members')
-    .select('workspace_id')
-    .eq('user_id', user.id)
-    .single()
+  // In sandbox mode, use the sandbox workspace directly
+  let workspaceId: string
+  if (isSandbox) {
+    workspaceId = SANDBOX_WORKSPACE_ID
+  } else {
+    const { data: membership } = await supabase
+      .from('workspace_members')
+      .select('workspace_id')
+      .eq('user_id', user.id)
+      .single()
 
-  if (!membership) {
-    return c.json({ error: 'No workspace found' }, 404)
+    if (!membership) {
+      return c.json({ error: 'No workspace found' }, 404)
+    }
+    workspaceId = membership.workspace_id
   }
 
   const { data: note, error } = await supabase
     .from('notes')
     .insert({
-      workspace_id: membership.workspace_id,
+      workspace_id: workspaceId,
       title: body.title,
       parent_id: body.parent_id,
       created_by: user.id,
