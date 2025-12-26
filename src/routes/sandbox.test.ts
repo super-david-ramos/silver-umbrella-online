@@ -52,13 +52,7 @@ describe('Sandbox Routes', () => {
         }
       ]
 
-      // Mock delete notes
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        delete: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null })
-      })
-
-      // Mock delete blocks
+      // Mock delete notes (blocks cascade delete automatically)
       mockSupabaseAdmin.from.mockReturnValueOnce({
         delete: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ error: null })
@@ -106,16 +100,10 @@ describe('Sandbox Routes', () => {
     })
 
     it('handles delete errors gracefully', async () => {
-      // Mock delete notes with error
+      // Mock delete notes with error (blocks cascade delete)
       mockSupabaseAdmin.from.mockReturnValueOnce({
         delete: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ error: { message: 'Delete failed' } })
-      })
-
-      // Mock delete blocks - should still be called
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        delete: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null })
       })
 
       // Mock insert notes - return 2 notes
@@ -157,12 +145,7 @@ describe('Sandbox Routes', () => {
     })
 
     it('returns 500 if note creation fails', async () => {
-      // Mock successful deletes
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        delete: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null })
-      })
-
+      // Mock successful delete (blocks cascade delete)
       mockSupabaseAdmin.from.mockReturnValueOnce({
         delete: vi.fn().mockReturnThis(),
         eq: vi.fn().mockResolvedValue({ error: null })
