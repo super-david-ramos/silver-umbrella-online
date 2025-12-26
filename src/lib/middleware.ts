@@ -1,6 +1,6 @@
 import { Context, Next } from 'hono'
 import jwt from 'jsonwebtoken'
-import { createSupabaseClient } from './supabase'
+import { createSupabaseClient, supabaseAdmin } from './supabase'
 
 const jwtSecret = process.env.SUPABASE_AUTH_JWT_SECRET || 'your-jwt-secret'
 
@@ -20,9 +20,8 @@ interface JwtPayload {
 export async function authMiddleware(c: Context, next: Next) {
   // Skip authentication if sandbox mode is active
   if (c.get('isSandbox') === true && c.get('user')) {
-    // Create a Supabase client for sandbox mode (without token)
-    const supabase = createSupabaseClient()
-    c.set('supabase', supabase)
+    // Use admin client for sandbox mode to bypass RLS
+    c.set('supabase', supabaseAdmin)
     await next()
     return
   }

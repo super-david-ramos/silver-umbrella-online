@@ -9,7 +9,11 @@ vi.mock('./supabase', () => ({
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: { message: 'Not authenticated' } })
     }
-  }))
+  })),
+  supabaseAdmin: {
+    from: vi.fn(),
+    auth: { getUser: vi.fn() }
+  }
 }))
 
 // Import authMiddleware after mocking
