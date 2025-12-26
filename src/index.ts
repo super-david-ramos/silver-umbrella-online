@@ -16,6 +16,13 @@ app.use('/api/*', cors({
 // Health check
 app.get('/', (c) => c.json({ status: 'ok', version: '1.0.0' }))
 
+// Demo page
+app.get('/demo', async (c) => {
+  const file = Bun.file('./public/demo.html')
+  const html = await file.text()
+  return c.html(html)
+})
+
 // Auth routes (no auth required) - passkey authentication
 app.route('/api/auth', passkeys)
 
