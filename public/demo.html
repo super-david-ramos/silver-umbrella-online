@@ -82,13 +82,12 @@
 <body>
   <h1>Passkey Authentication Demo</h1>
 
-  <!-- Step 1: Mock User Setup (since we don't have real Supabase auth in demo) -->
+  <!-- Step 1: Create Demo User -->
   <div class="card" id="setup-card">
-    <h2>Step 1: Demo Setup</h2>
-    <p>This demo simulates the passkey flow. In production, users would first authenticate via email/password or magic link before registering a passkey.</p>
-    <input type="text" id="demo-user-id" placeholder="Demo User ID (e.g., user-123)" value="demo-user-001">
+    <h2>Step 1: Create Demo User</h2>
+    <p>Create a real user in Supabase to test passkey registration. This user will be created in the database and can register passkeys.</p>
     <input type="email" id="demo-email" placeholder="Demo Email" value="demo@example.com">
-    <button onclick="setupDemoUser()">Initialize Demo User</button>
+    <button onclick="setupDemoUser()">Create Demo User</button>
     <div id="setup-status" class="status hidden"></div>
   </div>
 
@@ -146,36 +145,33 @@
     }
 
     async function setupDemoUser() {
-      const userId = document.getElementById('demo-user-id').value;
       const email = document.getElementById('demo-email').value;
 
-      if (!userId || !email) {
-        showStatus('setup-status', 'Please enter User ID and Email', 'error');
+      if (!email) {
+        showStatus('setup-status', 'Please enter an email address', 'error');
         return;
       }
 
-      currentUser = { id: userId, email: email, user_metadata: { display_name: 'Demo User' } };
-
-      // Create a demo JWT token (in production, this would come from Supabase auth)
-      // For demo purposes, we'll call the session endpoint to get a token
       try {
-        log(`Setting up demo user: ${userId} (${email})`);
+        log(`Creating demo user with email: ${email}`);
 
-        const response = await fetch(`${API_BASE}/auth/session`, {
+        const response = await fetch(`${API_BASE}/auth/demo-user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(currentUser)
+          body: JSON.stringify({ email })
         });
 
         const data = await response.json();
 
         if (response.ok) {
+          currentUser = data.user;
           demoToken = data.access_token;
-          log(`Demo token created: ${demoToken.substring(0, 50)}...`);
-          showStatus('setup-status', `Demo user initialized!\nToken: ${demoToken.substring(0, 50)}...`, 'success');
+          log(`Demo user created: ${currentUser.id} (${currentUser.email})`);
+          log(`Token created: ${demoToken.substring(0, 50)}...`);
+          showStatus('setup-status', `Demo user created!\nUser ID: ${currentUser.id}\nEmail: ${currentUser.email}`, 'success');
           document.getElementById('register-btn').disabled = false;
         } else {
-          throw new Error(data.error || 'Failed to create session');
+          throw new Error(data.error || 'Failed to create demo user');
         }
       } catch (error) {
         log(`Setup error: ${error.message}`, 'error');
