@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import notes from './routes/notes'
 import blocks from './routes/blocks'
 import passkeys from './routes/passkeys'
+import sandbox from './routes/sandbox'
 import { authMiddleware } from './lib/middleware'
 import { sandboxMiddleware } from './lib/sandbox'
 
@@ -28,5 +29,6 @@ app.use('/api/passkeys/*', authMiddleware)
 app.route('/api/notes', notes)
 app.route('/api/blocks', blocks)
 app.route('/api/passkeys', passkeys)
+app.route('/api/sandbox', sandbox)
 
 export default app
