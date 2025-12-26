@@ -75,6 +75,12 @@ The following skills are available in `superpowers/skills/`. **Check for applica
 - **Complexity reduction** - Simplicity as primary goal
 - **Evidence over claims** - Verify before declaring success
 
+## Testing Sandbox
+
+The project includes a non-authenticated testing sandbox (`/sandbox.html`) for manual feature testing.
+
+**Important:** When implementing new features or bug fixes, update the sandbox UI to include the new functionality. Prefer updating existing sandbox code over creating new test pages.
+
 ## Usage
 
 When starting any task:

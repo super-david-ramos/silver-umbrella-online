@@ -4,4 +4,5 @@ import { SupabaseClient, User } from '@supabase/supabase-js'
 export type Variables = {
   user: User
   supabase: SupabaseClient
+  isSandbox?: boolean
 }
