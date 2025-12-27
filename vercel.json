@@ -1,6 +1,12 @@
 {
   "bunVersion": "1.x",
+  "buildCommand": "bun run build",
+  "outputDirectory": "web/dist",
+  "framework": null,
   "rewrites": [
-    { "source": "/demo", "destination": "/demo.html" }
+    { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/demo", "destination": "/demo.html" },
+    { "source": "/sandbox", "destination": "/sandbox.html" },
+    { "source": "/((?!api/|demo|sandbox).*)", "destination": "/index.html" }
   ]
 }
