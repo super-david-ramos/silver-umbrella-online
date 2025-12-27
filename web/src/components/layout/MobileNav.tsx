@@ -6,7 +6,8 @@ export function MobileNav() {
   return (
     <nav className="fixed bottom-0 inset-x-0 h-16 border-t bg-background flex items-center justify-around pb-[env(safe-area-inset-bottom)]">
       <NavLink
-        to="/"
+        to="/app"
+        end
         className={({ isActive }) =>
           cn(
             'flex flex-col items-center gap-1 p-2 touch-target',
@@ -18,7 +19,7 @@ export function MobileNav() {
         <span className="text-xs">Notes</span>
       </NavLink>
       <NavLink
-        to="/search"
+        to="/app/search"
         className={({ isActive }) =>
           cn(
             'flex flex-col items-center gap-1 p-2 touch-target',
@@ -30,7 +31,7 @@ export function MobileNav() {
         <span className="text-xs">Search</span>
       </NavLink>
       <NavLink
-        to="/settings"
+        to="/app/settings"
         className={({ isActive }) =>
           cn(
             'flex flex-col items-center gap-1 p-2 touch-target',

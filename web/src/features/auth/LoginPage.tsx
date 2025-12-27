@@ -44,7 +44,7 @@ export function LoginPage() {
       return
     }
 
-    navigate('/')
+    navigate('/app')
   }
 
   return (

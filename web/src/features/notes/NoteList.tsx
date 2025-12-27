@@ -37,7 +37,7 @@ export function NoteList() {
         <NoteCard
           key={note.id}
           note={note}
-          onClick={() => navigate(`/note/${note.id}`)}
+          onClick={() => navigate(`/app/note/${note.id}`)}
           isActive={note.id === activeId}
         />
       ))}
