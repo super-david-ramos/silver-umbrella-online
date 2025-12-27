@@ -10,10 +10,14 @@ vi.mock('./supabase', () => ({
     auth: {
       getUser: vi.fn()
     }
-  }))
+  })),
+  supabaseAdmin: {
+    from: vi.fn(),
+    auth: { getUser: vi.fn() }
+  }
 }))
 
-import { createSupabaseClient } from './supabase'
+import { createSupabaseClient, supabaseAdmin } from './supabase'
 
 const jwtSecret = process.env.SUPABASE_AUTH_JWT_SECRET || 'your-jwt-secret'
 
@@ -203,5 +207,34 @@ describe('authMiddleware', () => {
 
     expect(res.status).toBe(401)
     expect(json).toEqual({ error: 'Invalid or expired token' })
+  })
+
+  it('uses supabaseAdmin for sandbox mode to bypass RLS', async () => {
+    // Create a custom middleware that sets sandbox mode
+    const sandboxApp = new Hono<{ Variables: Variables }>()
+
+    // Middleware to set sandbox mode before authMiddleware
+    sandboxApp.use('*', async (c, next) => {
+      c.set('isSandbox', true)
+      c.set('user', { id: 'sandbox-user-123', email: 'sandbox@example.com' })
+      await next()
+    })
+
+    sandboxApp.use('*', authMiddleware)
+
+    sandboxApp.get('/test', (c) => {
+      const supabase = c.get('supabase')
+      return c.json({
+        hasSupabase: !!supabase,
+        isAdmin: supabase === supabaseAdmin
+      })
+    })
+
+    const res = await sandboxApp.request('/test')
+    const json = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(json.hasSupabase).toBe(true)
+    expect(json.isAdmin).toBe(true) // This should pass after the fix
   })
 })

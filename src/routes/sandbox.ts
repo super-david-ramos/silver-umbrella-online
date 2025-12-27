@@ -17,14 +17,7 @@ sandbox.post('/reset', async (c) => {
       console.error('[SANDBOX] Error deleting notes:', deleteNotesError.message)
     }
 
-    const { error: deleteBlocksError } = await supabaseAdmin
-      .from('blocks')
-      .delete()
-      .eq('workspace_id', SANDBOX_WORKSPACE_ID)
-
-    if (deleteBlocksError) {
-      console.error('[SANDBOX] Error deleting blocks:', deleteBlocksError.message)
-    }
+    // Note: blocks are deleted via CASCADE when notes are deleted, no need to delete separately
 
     // Step 2: Seed sample notes
     const notesToCreate = [
@@ -57,21 +50,18 @@ sandbox.post('/reset', async (c) => {
     const note1Blocks = [
       {
         note_id: note1Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
         type: 'heading',
         content: { text: 'Welcome to the Testing Sandbox' },
         position: '1'
       },
       {
         note_id: note1Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
         type: 'paragraph',
         content: { text: 'This is a safe space to test all features without affecting real data.' },
         position: '2'
       },
       {
         note_id: note1Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
         type: 'code',
         content: { code: "console.log('Hello from sandbox!');", language: 'javascript' },
         position: '3'
@@ -82,28 +72,24 @@ sandbox.post('/reset', async (c) => {
     const note2Blocks = [
       {
         note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
         type: 'heading',
         content: { text: 'My Tasks' },
         position: '1'
       },
       {
         note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
         type: 'todo',
         content: { text: 'Try creating a new note', checked: false },
         position: '2'
       },
       {
         note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
         type: 'todo',
         content: { text: 'Edit this todo item', checked: false },
         position: '3'
       },
       {
         note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
         type: 'todo',
         content: { text: 'Delete a block', checked: false },
         position: '4'
