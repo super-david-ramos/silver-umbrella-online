@@ -12,7 +12,7 @@ export function AppShell() {
 
   const handleNewNote = async () => {
     const note = await createNote.mutateAsync({ title: 'Untitled' })
-    navigate(`/note/${note.id}`)
+    navigate(`/app/note/${note.id}`)
   }
 
   const isMobileLayout = hasTouchScreen && isPortrait

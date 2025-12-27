@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Testing Sandbox</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f5f5f5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: white;
+      padding: 1rem 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: #333;
+    }
+
+    /* Main Layout */
+    .container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 250px;
+      background: white;
+      border-right: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-header {
+      padding: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 600;
+      color: #555;
+    }
+    .notes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+    .note-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      margin-bottom: 0.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .note-item:hover {
+      background: #f3f4f6;
+    }
+    .note-item.active {
+      background: #e0e7ff;
+    }
+    .note-title {
+      flex: 1;
+      font-size: 0.875rem;
+      color: #333;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .note-item.empty .note-title {
+      color: #9ca3af;
+      font-style: italic;
+    }
+    .delete-note {
+      background: #dc2626;
+      color: white;
+      border: none;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      margin-left: 0.5rem;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .note-item:hover .delete-note {
+      opacity: 1;
+    }
+    .delete-note:hover {
+      background: #b91c1c;
+    }
+
+    /* Editor */
+    .editor {
+      flex: 1;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .editor-header {
+      padding: 1.5rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .editor-title {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 1.5rem;
+      font-weight: 600;
+      font-family: inherit;
+    }
+    .editor-content {
+      flex: 1;
+      padding: 1.5rem;
+    }
+    .block-item {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+    .block-header {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .block-type {
+      padding: 0.25rem 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      background: white;
+    }
+    .block-content {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      font-family: inherit;
+      background: white;
+      resize: vertical;
+      min-height: 60px;
+    }
+    .block-checkbox {
+      margin-right: 0.5rem;
+    }
+    .empty-state {
+      padding: 2rem;
+      text-align: center;
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    /* Debug Log */
+    .debug-panel {
+      height: 200px;
+      background: white;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+    }
+    .debug-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 600;
+      color: #555;
+      font-size: 0.875rem;
+    }
+    .debug-log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.75rem;
+      background: #1f2937;
+      color: #10b981;
+    }
+    .log-entry {
+      margin-bottom: 0.25rem;
+      word-break: break-all;
+    }
+    .log-entry.error {
+      color: #ef4444;
+    }
+
+    /* Buttons */
+    button {
+      background: #4F46E5;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #4338CA;
+    }
+    button:disabled {
+      background: #9CA3AF;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: #6B7280;
+    }
+    button.secondary:hover {
+      background: #4B5563;
+    }
+    button.danger {
+      background: #dc2626;
+    }
+    button.danger:hover {
+      background: #b91c1c;
+    }
+    button.small {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <h1>🧪 Testing Sandbox</h1>
+    <button onclick="resetSandbox()">Reset Data</button>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Notes Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">NOTES</div>
+      <div class="notes-list" id="notes-list">
+        <div class="empty-state">Loading...</div>
+      </div>
+      <div style="padding: 0.5rem;">
+        <button onclick="createNote()" style="width: 100%;">+ New Note</button>
+      </div>
+    </div>
+
+    <!-- Editor Panel -->
+    <div class="editor">
+      <div id="editor-container">
+        <div class="empty-state">Select a note to edit</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug Log -->
+  <div class="debug-panel">
+    <div class="debug-header">DEBUG LOG</div>
+    <div class="debug-log" id="debug-log"></div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+    let currentNote = null;
+    let notes = [];
+    let blocks = [];
+
+    // Logging
+    function log(message, isError = false) {
+      const logEl = document.getElementById('debug-log');
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${isError ? 'error' : ''}`;
+      entry.textContent = `[${timestamp}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(message);
+    }
+
+    // API Helpers
+    async function apiCall(method, endpoint, body = null) {
+      const url = `${API_BASE}${endpoint}${endpoint.includes('?') ? '&' : '?'}sandbox=true`;
+      log(`${method} ${endpoint}?sandbox=true`);
+
+      try {
+        const options = {
+          method,
+          headers: { 'Content-Type': 'application/json' }
+        };
+        if (body) {
+          options.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(url, options);
+        const data = await response.json();
+
+        if (response.ok) {
+          log(`→ ${response.status} ${JSON.stringify(data).substring(0, 100)}${JSON.stringify(data).length > 100 ? '...' : ''}`);
+          return data;
+        } else {
+          log(`→ ${response.status} ERROR: ${data.error || JSON.stringify(data)}`, true);
+          throw new Error(data.error || 'Request failed');
+        }
+      } catch (error) {
+        log(`→ ERROR: ${error.message}`, true);
+        throw error;
+      }
+    }
+
+    // Reset Sandbox
+    async function resetSandbox() {
+      if (!confirm('Reset all sandbox data? This will delete all notes and blocks.')) {
+        return;
+      }
+
+      try {
+        await apiCall('POST', '/sandbox/reset');
+        currentNote = null;
+        notes = [];
+        blocks = [];
+        await loadNotes();
+        renderEditor();
+        log('✓ Sandbox data reset');
+      } catch (error) {
+        alert('Failed to reset: ' + error.message);
+      }
+    }
+
+    // Load Notes
+    async function loadNotes() {
+      try {
+        const data = await apiCall('GET', '/notes');
+        notes = data.notes || [];
+        renderNotesList();
+      } catch (error) {
+        document.getElementById('notes-list').innerHTML =
+          '<div class="empty-state">Failed to load notes</div>';
+      }
+    }
+
+    // Render Notes List
+    function renderNotesList() {
+      const listEl = document.getElementById('notes-list');
+
+      if (notes.length === 0) {
+        listEl.innerHTML = '<div class="empty-state">No notes yet</div>';
+        return;
+      }
+
+      listEl.innerHTML = notes.map(note => {
+        const isEmpty = !note.title || note.title.trim() === '';
+        return `
+          <div class="note-item ${note.id === currentNote?.id ? 'active' : ''} ${isEmpty ? 'empty' : ''}"
+               onclick="selectNote(${note.id})">
+            <div class="note-title">
+              ${isEmpty ? 'Untitled Note' : escapeHtml(note.title)}
+            </div>
+            <button class="delete-note" onclick="deleteNote(event, ${note.id})">×</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Select Note
+    async function selectNote(noteId) {
+      const note = notes.find(n => n.id === noteId);
+      if (!note) return;
+
+      currentNote = note;
+      renderNotesList();
+
+      try {
+        const data = await apiCall('GET', `/notes/${noteId}`);
+        blocks = data.blocks || [];
+        renderEditor();
+      } catch (error) {
+        alert('Failed to load note: ' + error.message);
+      }
+    }
+
+    // Create Note
+    async function createNote() {
+      try {
+        const data = await apiCall('POST', '/notes', { title: 'New Note' });
+        notes.unshift(data.note);
+        renderNotesList();
+        await selectNote(data.note.id);
+      } catch (error) {
+        alert('Failed to create note: ' + error.message);
+      }
+    }
+
+    // Delete Note
+    async function deleteNote(event, noteId) {
+      event.stopPropagation();
+
+      if (!confirm('Delete this note?')) {
+        return;
+      }
+
+      try {
+        await apiCall('DELETE', `/notes/${noteId}`);
+        notes = notes.filter(n => n.id !== noteId);
+        if (currentNote?.id === noteId) {
+          currentNote = null;
+          blocks = [];
+          renderEditor();
+        }
+        renderNotesList();
+      } catch (error) {
+        alert('Failed to delete note: ' + error.message);
+      }
+    }
+
+    // Update Note Title
+    async function updateNoteTitle(title) {
+      if (!currentNote) return;
+
+      try {
+        await apiCall('PATCH', `/notes/${currentNote.id}`, { title });
+        currentNote.title = title;
+        const note = notes.find(n => n.id === currentNote.id);
+        if (note) note.title = title;
+        renderNotesList();
+      } catch (error) {
+        alert('Failed to update title: ' + error.message);
+      }
+    }
+
+    // Add Block
+    async function addBlock() {
+      if (!currentNote) return;
+
+      try {
+        const data = await apiCall('POST', `/notes/${currentNote.id}/blocks`, {
+          type: 'paragraph',
+          content: { text: '' },
+          position: blocks.length
+        });
+        blocks.push(data.block);
+        renderEditor();
+      } catch (error) {
+        alert('Failed to add block: ' + error.message);
+      }
+    }
+
+    // Update Block
+    async function updateBlock(blockId, updates) {
+      try {
+        await apiCall('PATCH', `/blocks/${blockId}`, updates);
+        const block = blocks.find(b => b.id === blockId);
+        if (block) {
+          Object.assign(block, updates);
+        }
+      } catch (error) {
+        alert('Failed to update block: ' + error.message);
+      }
+    }
+
+    // Delete Block
+    async function deleteBlock(blockId) {
+      if (!confirm('Delete this block?')) {
+        return;
+      }
+
+      try {
+        await apiCall('DELETE', `/blocks/${blockId}`);
+        blocks = blocks.filter(b => b.id !== blockId);
+        renderEditor();
+      } catch (error) {
+        alert('Failed to delete block: ' + error.message);
+      }
+    }
+
+    // Render Editor
+    function renderEditor() {
+      const editorEl = document.getElementById('editor-container');
+
+      if (!currentNote) {
+        editorEl.innerHTML = '<div class="empty-state">Select a note to edit</div>';
+        return;
+      }
+
+      editorEl.innerHTML = `
+        <div class="editor-header">
+          <input
+            type="text"
+            class="editor-title"
+            placeholder="Note title..."
+            value="${escapeHtml(currentNote.title || '')}"
+            onchange="updateNoteTitle(this.value)"
+          />
+        </div>
+        <div class="editor-content">
+          ${blocks.length === 0 ?
+            '<div class="empty-state">No blocks yet. Click "Add Block" to start.</div>' :
+            blocks.map(block => renderBlock(block)).join('')
+          }
+          <div class="button-group">
+            <button onclick="addBlock()">+ Add Block</button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Render Single Block
+    function renderBlock(block) {
+      const isTodo = block.type === 'todo';
+      const text = block.content?.text || '';
+      const checked = block.content?.checked || false;
+
+      return `
+        <div class="block-item">
+          <div class="block-header">
+            <select class="block-type" onchange="updateBlock(${block.id}, { type: this.value })">
+              <option value="paragraph" ${block.type === 'paragraph' ? 'selected' : ''}>Paragraph</option>
+              <option value="heading" ${block.type === 'heading' ? 'selected' : ''}>Heading</option>
+              <option value="todo" ${block.type === 'todo' ? 'selected' : ''}>Todo</option>
+              <option value="code" ${block.type === 'code' ? 'selected' : ''}>Code</option>
+              <option value="quote" ${block.type === 'quote' ? 'selected' : ''}>Quote</option>
+              <option value="list_item" ${block.type === 'list_item' ? 'selected' : ''}>List Item</option>
+            </select>
+            <button class="small danger" onclick="deleteBlock(${block.id})">Delete</button>
+          </div>
+          <div>
+            ${isTodo ? `
+              <input
+                type="checkbox"
+                class="block-checkbox"
+                ${checked ? 'checked' : ''}
+                onchange="updateBlock(${block.id}, { content: { text: '${escapeHtml(text).replace(/'/g, "\\'")}', checked: this.checked } })"
+              />
+            ` : ''}
+            <textarea
+              class="block-content"
+              placeholder="Block content..."
+              onchange="updateBlock(${block.id}, { content: { text: this.value${isTodo ? `, checked: ${checked}` : ''} } })"
+            >${escapeHtml(text)}</textarea>
+          </div>
+        </div>
+      `;
+    }
+
+    // Utility
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initialize
+    log('Sandbox loaded');
+    loadNotes();
+  </script>
+</body>
+</html>

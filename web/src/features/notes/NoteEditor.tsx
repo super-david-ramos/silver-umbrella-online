@@ -41,7 +41,7 @@ export function NoteEditor() {
   const handleDelete = async () => {
     if (id && confirm('Delete this note?')) {
       await deleteNote.mutateAsync(id)
-      navigate('/')
+      navigate('/app')
     }
   }
 
