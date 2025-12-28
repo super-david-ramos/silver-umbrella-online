@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { supabaseAdmin } from '../lib/supabase'
 import { SANDBOX_WORKSPACE_ID, SANDBOX_USER_ID } from '../lib/sandbox'
-import { initializeNewUser } from '../lib/user-initialization'
 
 const sandbox = new Hono()
 
@@ -147,63 +146,6 @@ sandbox.post('/reset', async (c) => {
   } catch (error) {
     console.error('[SANDBOX] Unexpected error:', error)
     return c.json({ error: 'Internal server error' }, 500)
-  }
-})
-
-// Setup workspace for existing user by email (admin endpoint)
-sandbox.post('/setup-user', async (c) => {
-  try {
-    const body = await c.req.json()
-    const { email } = body
-
-    if (!email) {
-      return c.json({ error: 'Email is required' }, 400)
-    }
-
-    // Find user by email in Supabase auth
-    const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers()
-
-    if (listError) {
-      return c.json({ error: `Failed to list users: ${listError.message}` }, 500)
-    }
-
-    const user = users.find(u => u.email === email)
-
-    if (!user) {
-      return c.json({ error: `User not found: ${email}` }, 404)
-    }
-
-    // Check if user already has a workspace
-    const { data: existingMembership } = await supabaseAdmin
-      .from('workspace_members')
-      .select('workspace_id')
-      .eq('user_id', user.id)
-      .single()
-
-    if (existingMembership) {
-      return c.json({
-        message: 'User already has a workspace',
-        userId: user.id,
-        workspaceId: existingMembership.workspace_id
-      })
-    }
-
-    // Initialize workspace and tutorial note for user
-    const { workspaceId, tutorialNoteId } = await initializeNewUser(
-      user.id,
-      user.email || 'user'
-    )
-
-    return c.json({
-      message: 'Workspace and tutorial note created successfully',
-      userId: user.id,
-      email: user.email,
-      workspaceId,
-      tutorialNoteId
-    })
-  } catch (error) {
-    console.error('[SANDBOX] Setup user error:', error)
-    return c.json({ error: error instanceof Error ? error.message : 'Unknown error' }, 500)
   }
 })
 
