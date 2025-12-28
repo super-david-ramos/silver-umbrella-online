@@ -67,7 +67,14 @@ describe('Notes Routes', () => {
       expect(json).toEqual(mockNotes)
     })
 
-    it('returns 404 when no workspace found', async () => {
+    it('auto-initializes new user when no workspace found', async () => {
+      const tutorialNote = {
+        id: 'tutorial-note-1',
+        title: 'Welcome to Notes',
+        updated_at: '2024-01-01'
+      }
+
+      // Mock workspace lookup - returns null (no workspace)
       mockSupabaseClient.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -77,11 +84,79 @@ describe('Notes Routes', () => {
         })
       })
 
+      // Mock workspace creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: { id: 'ws-new-123', name: "test's Workspace" },
+          error: null
+        })
+      })
+
+      // Mock workspace_members insert
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: vi.fn().mockResolvedValue({ error: null })
+      })
+
+      // Mock tutorial note creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: tutorialNote,
+          error: null
+        })
+      })
+
+      // Mock blocks creation
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: vi.fn().mockResolvedValue({ error: null })
+      })
+
+      // Mock notes fetch after initialization
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({
+          data: [tutorialNote],
+          error: null
+        })
+      })
+
       const res = await app.request('/api/notes')
       const json = await res.json()
 
-      expect(res.status).toBe(404)
-      expect(json).toEqual({ error: 'No workspace found' })
+      expect(res.status).toBe(200)
+      expect(json).toEqual([tutorialNote])
+    })
+
+    it('returns 500 when user initialization fails', async () => {
+      // Mock workspace lookup - returns null (no workspace)
+      mockSupabaseClient.from.mockReturnValueOnce({
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: null
+        })
+      })
+
+      // Mock workspace creation failure
+      mockSupabaseClient.from.mockReturnValueOnce({
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Database connection failed' }
+        })
+      })
+
+      const res = await app.request('/api/notes')
+      const json = await res.json()
+
+      expect(res.status).toBe(500)
+      expect(json.error).toContain('Failed to initialize user')
     })
 
     it('returns 500 on database error', async () => {

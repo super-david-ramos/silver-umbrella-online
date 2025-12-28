@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { authMiddleware } from '../lib/middleware'
 import type { Variables } from '../types/hono'
 import { SANDBOX_WORKSPACE_ID } from '../lib/sandbox'
+import { initializeNewUser } from '../lib/user-initialization'
 
 const createNoteSchema = z.object({
   title: z.string().optional().default('Untitled'),
@@ -38,9 +39,21 @@ notes.get('/', async (c) => {
       .single()
 
     if (!membership) {
-      return c.json({ error: 'No workspace found' }, 404)
+      // Auto-initialize new user with workspace and tutorial note
+      try {
+        const { workspaceId: newWorkspaceId } = await initializeNewUser(
+          supabase,
+          user.id,
+          user.email || 'user'
+        )
+        workspaceId = newWorkspaceId
+      } catch (error) {
+        console.error('Failed to initialize user:', error)
+        return c.json({ error: `Failed to initialize user: ${error instanceof Error ? error.message : 'Unknown error'}` }, 500)
+      }
+    } else {
+      workspaceId = membership.workspace_id
     }
-    workspaceId = membership.workspace_id
   }
 
   const { data: notesList, error } = await supabase
@@ -103,9 +116,21 @@ notes.post('/', zValidator('json', createNoteSchema), async (c) => {
       .single()
 
     if (!membership) {
-      return c.json({ error: 'No workspace found' }, 404)
+      // Auto-initialize new user with workspace and tutorial note
+      try {
+        const { workspaceId: newWorkspaceId } = await initializeNewUser(
+          supabase,
+          user.id,
+          user.email || 'user'
+        )
+        workspaceId = newWorkspaceId
+      } catch (error) {
+        console.error('Failed to initialize user:', error)
+        return c.json({ error: `Failed to initialize user: ${error instanceof Error ? error.message : 'Unknown error'}` }, 500)
+      }
+    } else {
+      workspaceId = membership.workspace_id
     }
-    workspaceId = membership.workspace_id
   }
 
   const { data: note, error } = await supabase
