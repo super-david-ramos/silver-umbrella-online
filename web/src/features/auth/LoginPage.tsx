@@ -1,19 +1,16 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { OTPInput } from './OTPInput'
 import { useAuthContext } from '@/lib/auth-context'
 
-type Step = 'email' | 'otp'
+type Step = 'email' | 'sent'
 
 export function LoginPage() {
   const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { signInWithOtp, verifyOtp } = useAuthContext()
-  const navigate = useNavigate()
+  const { signInWithOtp } = useAuthContext()
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,23 +25,8 @@ export function LoginPage() {
       return
     }
 
-    setStep('otp')
+    setStep('sent')
     setLoading(false)
-  }
-
-  const handleOTPComplete = async (code: string) => {
-    setLoading(true)
-    setError(null)
-
-    const { error } = await verifyOtp(email, code)
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-      return
-    }
-
-    navigate('/app')
   }
 
   return (
@@ -55,7 +37,7 @@ export function LoginPage() {
           <p className="text-muted-foreground mt-2">
             {step === 'email'
               ? 'Enter your email to sign in'
-              : 'Enter the code sent to your email'}
+              : 'Check your email'}
           </p>
         </div>
 
@@ -81,18 +63,20 @@ export function LoginPage() {
             </Button>
           </form>
         ) : (
-          <div className="space-y-4">
-            <OTPInput onComplete={handleOTPComplete} disabled={loading} />
-            <p className="text-sm text-center text-muted-foreground">
-              Didn't receive a code?{' '}
-              <button
-                type="button"
-                onClick={() => setStep('email')}
-                className="text-primary underline"
-              >
-                Try again
-              </button>
+          <div className="space-y-4 text-center">
+            <p className="text-sm">
+              We sent a magic link to <strong>{email}</strong>
             </p>
+            <p className="text-sm text-muted-foreground">
+              Click the link in the email to sign in.
+            </p>
+            <button
+              type="button"
+              onClick={() => setStep('email')}
+              className="text-sm text-primary underline"
+            >
+              Use a different email
+            </button>
           </div>
         )}
       </div>
