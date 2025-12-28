@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthContext } from './lib/auth-context'
 import { LandingPage } from './features/landing/LandingPage'
 import { LoginPage } from './features/auth/LoginPage'
+import { AuthCallback } from './features/auth/AuthCallback'
 import { AppShell } from './components/layout/AppShell'
 import { NoteList } from './features/notes/NoteList'
 import { NoteEditor } from './features/notes/NoteEditor'
@@ -35,6 +36,7 @@ function App() {
         {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Demo mode - no auth required */}
         <Route
