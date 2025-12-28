@@ -54,8 +54,8 @@ describe('Notes Routes', () => {
         { id: 'note-2', title: 'Second Note', updated_at: '2024-01-02' }
       ]
 
-      // Mock workspace lookup
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock workspace lookup via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -81,59 +81,13 @@ describe('Notes Routes', () => {
       expect(json).toEqual(mockNotes)
     })
 
-    it('auto-initializes new user when no workspace found', async () => {
-      const tutorialNote = {
-        id: 'tutorial-note-1',
-        title: 'Welcome to Notes',
-        updated_at: '2024-01-01'
-      }
-
-      // Mock workspace lookup via user's client - returns null (no workspace)
-      mockSupabaseClient.from.mockReturnValueOnce({
+    it('returns 400 when user workspace not initialized', async () => {
+      // Mock workspace lookup via admin client - returns null (no workspace)
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
           data: null,
-          error: null
-        })
-      })
-
-      // Mock workspace creation via admin client
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: { id: 'ws-new-123', name: "test's Workspace" },
-          error: null
-        })
-      })
-
-      // Mock workspace_members insert via admin client
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        insert: vi.fn().mockResolvedValue({ error: null })
-      })
-
-      // Mock tutorial note creation via admin client
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: tutorialNote,
-          error: null
-        })
-      })
-
-      // Mock blocks creation via admin client
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        insert: vi.fn().mockResolvedValue({ error: null })
-      })
-
-      // Mock notes fetch after initialization via user's client
-      mockSupabaseClient.from.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({
-          data: [tutorialNote],
           error: null
         })
       })
@@ -141,40 +95,13 @@ describe('Notes Routes', () => {
       const res = await app.request('/api/notes')
       const json = await res.json()
 
-      expect(res.status).toBe(200)
-      expect(json).toEqual([tutorialNote])
-    })
-
-    it('returns 500 when user initialization fails', async () => {
-      // Mock workspace lookup via user's client - returns null (no workspace)
-      mockSupabaseClient.from.mockReturnValueOnce({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: null
-        })
-      })
-
-      // Mock workspace creation failure via admin client
-      mockSupabaseAdmin.from.mockReturnValueOnce({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: { message: 'Database connection failed' }
-        })
-      })
-
-      const res = await app.request('/api/notes')
-      const json = await res.json()
-
-      expect(res.status).toBe(500)
-      expect(json.error).toContain('Failed to initialize user')
+      expect(res.status).toBe(400)
+      expect(json.error).toContain('not initialized')
     })
 
     it('returns 500 on database error', async () => {
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock workspace lookup via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -254,7 +181,8 @@ describe('Notes Routes', () => {
     it('creates a new note with default title', async () => {
       const mockNote = { id: 'note-new', title: 'Untitled', workspace_id: 'ws-123' }
 
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock workspace lookup via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -291,7 +219,8 @@ describe('Notes Routes', () => {
     it('creates a note with custom title', async () => {
       const mockNote = { id: 'note-new', title: 'My Custom Note', workspace_id: 'ws-123' }
 
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock workspace lookup via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({

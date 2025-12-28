@@ -79,9 +79,9 @@ function AuthHashHandler({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuthContext()
+  const { user, loading, workspaceReady } = useAuthContext()
 
-  if (loading) {
+  if (loading || (user && !workspaceReady)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />

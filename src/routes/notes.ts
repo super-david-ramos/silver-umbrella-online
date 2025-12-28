@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { authMiddleware } from '../lib/middleware'
 import type { Variables } from '../types/hono'
 import { SANDBOX_WORKSPACE_ID } from '../lib/sandbox'
-import { initializeNewUser } from '../lib/user-initialization'
+import { supabaseAdmin } from '../lib/supabase'
 
 const createNoteSchema = z.object({
   title: z.string().optional().default('Untitled'),
@@ -32,27 +32,17 @@ notes.get('/', async (c) => {
   if (isSandbox) {
     workspaceId = SANDBOX_WORKSPACE_ID
   } else {
-    const { data: membership } = await supabase
+    // Use admin client for workspace lookup (bypasses RLS for reliability)
+    const { data: membership } = await supabaseAdmin
       .from('workspace_members')
       .select('workspace_id')
       .eq('user_id', user.id)
       .single()
 
     if (!membership) {
-      // Auto-initialize new user with workspace and tutorial note
-      try {
-        const { workspaceId: newWorkspaceId } = await initializeNewUser(
-          user.id,
-          user.email || 'user'
-        )
-        workspaceId = newWorkspaceId
-      } catch (error) {
-        console.error('Failed to initialize user:', error)
-        return c.json({ error: `Failed to initialize user: ${error instanceof Error ? error.message : 'Unknown error'}` }, 500)
-      }
-    } else {
-      workspaceId = membership.workspace_id
+      return c.json({ error: 'User workspace not initialized. Please refresh the page.' }, 400)
     }
+    workspaceId = membership.workspace_id
   }
 
   const { data: notesList, error } = await supabase
@@ -108,27 +98,17 @@ notes.post('/', zValidator('json', createNoteSchema), async (c) => {
   if (isSandbox) {
     workspaceId = SANDBOX_WORKSPACE_ID
   } else {
-    const { data: membership } = await supabase
+    // Use admin client for workspace lookup (bypasses RLS for reliability)
+    const { data: membership } = await supabaseAdmin
       .from('workspace_members')
       .select('workspace_id')
       .eq('user_id', user.id)
       .single()
 
     if (!membership) {
-      // Auto-initialize new user with workspace and tutorial note
-      try {
-        const { workspaceId: newWorkspaceId } = await initializeNewUser(
-          user.id,
-          user.email || 'user'
-        )
-        workspaceId = newWorkspaceId
-      } catch (error) {
-        console.error('Failed to initialize user:', error)
-        return c.json({ error: `Failed to initialize user: ${error instanceof Error ? error.message : 'Unknown error'}` }, 500)
-      }
-    } else {
-      workspaceId = membership.workspace_id
+      return c.json({ error: 'User workspace not initialized. Please refresh the page.' }, 400)
     }
+    workspaceId = membership.workspace_id
   }
 
   const { data: note, error } = await supabase
