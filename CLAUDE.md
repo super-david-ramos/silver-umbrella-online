@@ -241,23 +241,45 @@ Vercel:
 
 This project uses [Superpowers](https://github.com/obra/superpowers) for structured development workflows.
 
-### Setup (do this automatically if skills are missing)
+### MANDATORY: First Steps for Every Task
 
+**The superpowers submodule is automatically pulled on session start** via the Claude Code hook in `.claude/settings.json`. If skills are missing, run manually:
 ```bash
 git submodule update --init --recursive
 ```
+
+**Before starting ANY work, you MUST:**
+
+1. **Evaluate which skill(s) apply** to the user's request by reviewing the table below. Consider the nature of the task and select the most appropriate skill(s). If the user explicitly requested a specific skill, use that one.
+
+2. **Read the selected skill file** at `superpowers/skills/<skill>/SKILL.md` before proceeding.
+
+3. **Follow the skill's process exactly** - these are mandatory workflows, not suggestions.
 
 ### Available Skills
 
 | Skill | When to Use |
 |-------|-------------|
-| **brainstorming** | Before writing code - explore alternatives |
-| **writing-plans** | Create implementation plans for new features |
-| **executing-plans** | Execute plans with human checkpoints |
-| **test-driven-development** | RED-GREEN-REFACTOR cycle |
-| **systematic-debugging** | Root cause analysis for bugs |
-| **verification-before-completion** | Verify fixes actually work |
-| **subagent-driven-development** | Fast iteration with review |
+| **brainstorming** | Unclear requirements, multiple approaches possible, need to explore alternatives before committing to a solution |
+| **writing-plans** | New features, significant changes, anything requiring multiple steps or files |
+| **executing-plans** | Following an existing plan with human checkpoints at key decision points |
+| **test-driven-development** | Any code changes - write tests first, RED-GREEN-REFACTOR cycle |
+| **systematic-debugging** | Bug reports, unexpected behavior, errors - use root cause analysis |
+| **verification-before-completion** | Before declaring any task complete - verify the fix/feature actually works |
+| **subagent-driven-development** | Large tasks that benefit from fast iteration with periodic review |
+
+### Skill Selection Guide
+
+When the user hasn't specified a skill, analyze their request:
+
+- **"Fix bug X" / "X is broken"** → `systematic-debugging` + `verification-before-completion`
+- **"Add feature X" / "Implement X"** → `writing-plans` + `test-driven-development`
+- **"How should we approach X?" / "What's the best way to..."** → `brainstorming`
+- **"Execute the plan for X"** → `executing-plans`
+- **"Refactor X" / "Improve X"** → `test-driven-development` (ensure tests exist first)
+- **Large multi-file changes** → `subagent-driven-development`
+
+Multiple skills can be combined. For example, a new feature might use `brainstorming` → `writing-plans` → `test-driven-development` → `verification-before-completion`.
 
 ### Philosophy
 
@@ -265,12 +287,3 @@ git submodule update --init --recursive
 - **Systematic over ad-hoc**: Follow processes, don't guess
 - **Complexity reduction**: Simplest solution that works
 - **Evidence over claims**: Verify before declaring success
-
-### Usage
-
-When starting any task:
-1. Check if any skill applies (even 1% chance means use it)
-2. Read the skill file at `superpowers/skills/<skill>/SKILL.md`
-3. Follow the skill's process exactly
-
-Skills are mandatory workflows, not suggestions.
