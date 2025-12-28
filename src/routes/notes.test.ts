@@ -1,16 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Hono } from 'hono'
 
-// Mock the supabase module
-const mockSupabaseClient = {
-  from: vi.fn(),
-  auth: {
-    getUser: vi.fn()
+// Use vi.hoisted to ensure mocks are defined before vi.mock runs
+const { mockSupabaseClient, mockSupabaseAdmin } = vi.hoisted(() => ({
+  mockSupabaseClient: {
+    from: vi.fn(),
+    auth: {
+      getUser: vi.fn()
+    }
+  },
+  mockSupabaseAdmin: {
+    from: vi.fn(),
+    auth: {
+      admin: {
+        listUsers: vi.fn()
+      }
+    }
   }
-}
+}))
 
 vi.mock('../lib/supabase', () => ({
-  createSupabaseClient: vi.fn(() => mockSupabaseClient)
+  createSupabaseClient: vi.fn(() => mockSupabaseClient),
+  supabaseAdmin: mockSupabaseAdmin
 }))
 
 // Mock the middleware to inject user and supabase
@@ -31,6 +42,9 @@ describe('Notes Routes', () => {
     vi.clearAllMocks()
     app = new Hono()
     app.route('/api/notes', notes)
+    // Reset the mock implementations
+    mockSupabaseClient.from.mockReset()
+    mockSupabaseAdmin.from.mockReset()
   })
 
   describe('GET /api/notes', () => {
@@ -74,7 +88,7 @@ describe('Notes Routes', () => {
         updated_at: '2024-01-01'
       }
 
-      // Mock workspace lookup - returns null (no workspace)
+      // Mock workspace lookup via user's client - returns null (no workspace)
       mockSupabaseClient.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -84,8 +98,8 @@ describe('Notes Routes', () => {
         })
       })
 
-      // Mock workspace creation
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock workspace creation via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -94,13 +108,13 @@ describe('Notes Routes', () => {
         })
       })
 
-      // Mock workspace_members insert
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock workspace_members insert via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockResolvedValue({ error: null })
       })
 
-      // Mock tutorial note creation
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock tutorial note creation via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -109,12 +123,12 @@ describe('Notes Routes', () => {
         })
       })
 
-      // Mock blocks creation
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock blocks creation via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockResolvedValue({ error: null })
       })
 
-      // Mock notes fetch after initialization
+      // Mock notes fetch after initialization via user's client
       mockSupabaseClient.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -132,7 +146,7 @@ describe('Notes Routes', () => {
     })
 
     it('returns 500 when user initialization fails', async () => {
-      // Mock workspace lookup - returns null (no workspace)
+      // Mock workspace lookup via user's client - returns null (no workspace)
       mockSupabaseClient.from.mockReturnValueOnce({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
@@ -142,8 +156,8 @@ describe('Notes Routes', () => {
         })
       })
 
-      // Mock workspace creation failure
-      mockSupabaseClient.from.mockReturnValueOnce({
+      // Mock workspace creation failure via admin client
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({

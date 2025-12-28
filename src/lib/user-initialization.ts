@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from './supabase'
 
 export const DEFAULT_TUTORIAL_NOTE = {
   title: 'Welcome to Notes',
@@ -67,12 +67,11 @@ export const DEFAULT_TUTORIAL_NOTE = {
 }
 
 export async function initializeNewUser(
-  supabase: SupabaseClient,
   userId: string,
   userEmail: string
 ): Promise<{ workspaceId: string; tutorialNoteId: string }> {
-  // Create a new workspace for the user
-  const { data: workspace, error: workspaceError } = await supabase
+  // Create a new workspace for the user (using admin client to bypass RLS)
+  const { data: workspace, error: workspaceError } = await supabaseAdmin
     .from('workspaces')
     .insert({
       name: `${userEmail.split('@')[0]}'s Workspace`,
@@ -85,7 +84,7 @@ export async function initializeNewUser(
   }
 
   // Add user as a workspace member
-  const { error: memberError } = await supabase
+  const { error: memberError } = await supabaseAdmin
     .from('workspace_members')
     .insert({
       workspace_id: workspace.id,
@@ -98,7 +97,7 @@ export async function initializeNewUser(
   }
 
   // Create the tutorial note
-  const { data: note, error: noteError } = await supabase
+  const { data: note, error: noteError } = await supabaseAdmin
     .from('notes')
     .insert({
       workspace_id: workspace.id,
@@ -122,7 +121,7 @@ export async function initializeNewUser(
     workspace_id: workspace.id,
   }))
 
-  const { error: blocksError } = await supabase
+  const { error: blocksError } = await supabaseAdmin
     .from('blocks')
     .insert(blocksToInsert)
 
