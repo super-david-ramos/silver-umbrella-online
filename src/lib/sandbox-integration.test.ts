@@ -3,16 +3,7 @@ import { Hono } from 'hono'
 import { sandboxMiddleware } from './sandbox'
 import type { Variables } from '../types/hono'
 
-// Mock supabase to avoid environment variable requirements
-vi.mock('./supabase', () => ({
-  createSupabaseClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: { message: 'Not authenticated' } })
-    }
-  }))
-}))
-
-// Import authMiddleware after mocking
+// Import authMiddleware
 import { authMiddleware } from './middleware'
 
 describe('Sandbox Integration with Auth Middleware', () => {

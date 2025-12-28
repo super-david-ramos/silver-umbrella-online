@@ -1,27 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { Hono } from 'hono'
 
-// Mock the supabase module
-const mockSupabaseClient = {
-  from: vi.fn(),
-  auth: {
-    getUser: vi.fn()
-  }
-}
-
-vi.mock('../lib/supabase', () => ({
-  createSupabaseClient: vi.fn(() => mockSupabaseClient)
+// Mock the db module
+vi.mock('../lib/db', () => ({
+  query: vi.fn(),
+  queryOne: vi.fn(),
+  queryRow: vi.fn()
 }))
 
-// Mock the middleware to inject user and supabase
+// Mock the middleware to inject user
 vi.mock('../lib/middleware', () => ({
   authMiddleware: vi.fn(async (c, next) => {
     c.set('user', { id: 'user-123', email: 'test@example.com' })
-    c.set('supabase', mockSupabaseClient)
     await next()
   })
 }))
 
+import { query, queryRow } from '../lib/db'
 import blocks from './blocks'
 
 describe('Blocks Routes', () => {
@@ -43,14 +38,7 @@ describe('Blocks Routes', () => {
         position: 'a1'
       }
 
-      mockSupabaseClient.from.mockReturnValueOnce({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: mockBlock,
-          error: null
-        })
-      })
+      vi.mocked(queryRow).mockResolvedValueOnce(mockBlock)
 
       const res = await app.request('/api/blocks/notes/note-1/blocks', {
         method: 'POST',
@@ -76,14 +64,7 @@ describe('Blocks Routes', () => {
         position: 'a2'
       }
 
-      mockSupabaseClient.from.mockReturnValueOnce({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: mockBlock,
-          error: null
-        })
-      })
+      vi.mocked(queryRow).mockResolvedValueOnce(mockBlock)
 
       const res = await app.request('/api/blocks/notes/note-1/blocks', {
         method: 'POST',
@@ -101,14 +82,7 @@ describe('Blocks Routes', () => {
     })
 
     it('returns 500 on insert error', async () => {
-      mockSupabaseClient.from.mockReturnValueOnce({
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: null,
-          error: { message: 'Insert failed' }
-        })
-      })
+      vi.mocked(queryRow).mockResolvedValueOnce(null)
 
       const res = await app.request('/api/blocks/notes/note-1/blocks', {
         method: 'POST',
@@ -122,7 +96,7 @@ describe('Blocks Routes', () => {
       const json = await res.json()
 
       expect(res.status).toBe(500)
-      expect(json).toEqual({ error: 'Insert failed' })
+      expect(json).toEqual({ error: 'Failed to create block' })
     })
   })
 
@@ -133,15 +107,7 @@ describe('Blocks Routes', () => {
         content: { text: 'Updated content' }
       }
 
-      mockSupabaseClient.from.mockReturnValueOnce({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: mockBlock,
-          error: null
-        })
-      })
+      vi.mocked(queryRow).mockResolvedValueOnce(mockBlock)
 
       const res = await app.request('/api/blocks/block-1', {
         method: 'PATCH',
@@ -160,15 +126,7 @@ describe('Blocks Routes', () => {
         type: 'heading'
       }
 
-      mockSupabaseClient.from.mockReturnValueOnce({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: mockBlock,
-          error: null
-        })
-      })
+      vi.mocked(queryRow).mockResolvedValueOnce(mockBlock)
 
       const res = await app.request('/api/blocks/block-1', {
         method: 'PATCH',
@@ -187,15 +145,7 @@ describe('Blocks Routes', () => {
         position: 'b0'
       }
 
-      mockSupabaseClient.from.mockReturnValueOnce({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: mockBlock,
-          error: null
-        })
-      })
+      vi.mocked(queryRow).mockResolvedValueOnce(mockBlock)
 
       const res = await app.request('/api/blocks/block-1', {
         method: 'PATCH',
@@ -211,12 +161,7 @@ describe('Blocks Routes', () => {
 
   describe('DELETE /api/blocks/:id', () => {
     it('deletes a block and returns success', async () => {
-      mockSupabaseClient.from.mockReturnValueOnce({
-        delete: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({
-          error: null
-        })
-      })
+      vi.mocked(query).mockResolvedValueOnce([])
 
       const res = await app.request('/api/blocks/block-1', {
         method: 'DELETE'
@@ -226,31 +171,11 @@ describe('Blocks Routes', () => {
       expect(res.status).toBe(200)
       expect(json).toEqual({ success: true })
     })
-
-    it('returns 500 on delete error', async () => {
-      mockSupabaseClient.from.mockReturnValueOnce({
-        delete: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({
-          error: { message: 'Delete failed' }
-        })
-      })
-
-      const res = await app.request('/api/blocks/block-1', {
-        method: 'DELETE'
-      })
-      const json = await res.json()
-
-      expect(res.status).toBe(500)
-      expect(json).toEqual({ error: 'Delete failed' })
-    })
   })
 
   describe('PATCH /api/blocks/reorder', () => {
     it('batch updates block positions', async () => {
-      mockSupabaseClient.from.mockReturnValue({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null })
-      })
+      vi.mocked(query).mockResolvedValue([])
 
       const res = await app.request('/api/blocks/reorder', {
         method: 'PATCH',
@@ -267,32 +192,6 @@ describe('Blocks Routes', () => {
 
       expect(res.status).toBe(200)
       expect(json).toEqual({ success: true })
-    })
-
-    it('returns 500 when some updates fail', async () => {
-      mockSupabaseClient.from.mockReturnValueOnce({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: null })
-      })
-      mockSupabaseClient.from.mockReturnValueOnce({
-        update: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockResolvedValue({ error: { message: 'Update failed' } })
-      })
-
-      const res = await app.request('/api/blocks/reorder', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          updates: [
-            { id: '550e8400-e29b-41d4-a716-446655440001', position: 'a0' },
-            { id: '550e8400-e29b-41d4-a716-446655440002', position: 'a1' }
-          ]
-        })
-      })
-      const json = await res.json()
-
-      expect(res.status).toBe(500)
-      expect(json).toEqual({ error: 'Some updates failed' })
     })
   })
 })

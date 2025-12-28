@@ -9,31 +9,58 @@ import {
 } from '@simplewebauthn/server'
 import { isoUint8Array } from '@simplewebauthn/server/helpers'
 import jwt from 'jsonwebtoken'
-import { supabaseAdmin } from '../lib/supabase'
-import type { Variables } from '../types/hono'
+import { query, queryOne, queryRow } from '../lib/db'
+import type { Variables, User } from '../types/hono'
 import type { AuthenticatorTransportFuture } from '@simplewebauthn/server'
+import { randomUUID } from 'crypto'
 
 const passkeys = new Hono<{ Variables: Variables }>()
 
 // Environment variables for WebAuthn
 const rpName = process.env.WEBAUTHN_RELYING_PARTY_NAME || 'Notes App'
-const jwtSecret = process.env.SUPABASE_AUTH_JWT_SECRET || 'your-jwt-secret'
-const jwtIssuer = process.env.SUPABASE_AUTH_JWT_ISSUER || 'supabase'
+const jwtSecret = process.env.JWT_SECRET || 'your-jwt-secret'
+const jwtIssuer = process.env.JWT_ISSUER || 'notes-app'
 
-// WebAuthn configuration - following reference implementation pattern
-// Environment variables are the ONLY reliable source for RP ID and origin
-// Dynamic detection from headers is unreliable due to proxy inconsistencies
+interface Credential {
+  id: string
+  user_id: string
+  friendly_name: string
+  credential_type: string
+  credential_id: string
+  public_key: string
+  aaguid: string
+  sign_count: number
+  transports: string[]
+  user_verification_status: string
+  device_type: string
+  backup_state: string
+  created_at: string
+  last_used_at: string
+}
+
+interface Challenge {
+  id: string
+  user_id: string | null
+  value: string
+  created_at: string
+}
+
+interface DbUser {
+  id: string
+  email: string
+  display_name: string | null
+  created_at: string
+}
+
+// WebAuthn configuration
 function getWebAuthnConfig(c: { req: { header: (name: string) => string | undefined } }) {
   const envRpId = process.env.WEBAUTHN_RELYING_PARTY_ID
   const envOrigin = process.env.WEBAUTHN_RELYING_PARTY_ORIGIN
 
-  // If both env vars are set, use them (recommended for production)
   if (envRpId && envOrigin) {
     return { rpId: envRpId, origin: envOrigin }
   }
 
-  // Fallback: detect from request headers (development only)
-  // WARNING: This can cause verification failures if headers are inconsistent between requests
   const host = c.req.header('host') || 'localhost:3000'
   const hostname = host.split(':')[0]
   const protocol = c.req.header('x-forwarded-proto') || 'http'
@@ -41,7 +68,6 @@ function getWebAuthnConfig(c: { req: { header: (name: string) => string | undefi
   const rpId = envRpId || hostname
   const origin = envOrigin || `${protocol}://${host}`
 
-  // Log warning when falling back to dynamic detection
   if (!envRpId || !envOrigin) {
     console.warn(
       'WebAuthn: Using dynamic origin detection. Set WEBAUTHN_RELYING_PARTY_ID and WEBAUTHN_RELYING_PARTY_ORIGIN env vars for production.',
@@ -59,21 +85,20 @@ function getWebAuthnConfig(c: { req: { header: (name: string) => string | undefi
 // POST /passkeys/challenge - Start passkey registration
 passkeys.post('/challenge', async (c) => {
   const user = c.get('user')
-  const supabase = c.get('supabase')
   const { rpId } = getWebAuthnConfig(c)
 
   // Get existing credentials for this user (to exclude from registration)
-  const { data: credentials } = await supabase
-    .from('credentials')
-    .select('credential_id, credential_type, transports')
-    .eq('user_id', user.id)
+  const credentials = await query<Credential>(
+    'SELECT credential_id, credential_type, transports FROM credentials WHERE user_id = $1',
+    [user.id]
+  )
 
   const options = await generateRegistrationOptions({
     rpName,
     rpID: rpId,
     userName: user.email || user.id,
     userID: isoUint8Array.fromASCIIString(user.id),
-    userDisplayName: user.user_metadata?.display_name || user.email || 'User',
+    userDisplayName: user.user_metadata?.display_name as string || user.email || 'User',
     attestationType: 'none',
     authenticatorSelection: {
       residentKey: 'preferred',
@@ -87,12 +112,13 @@ passkeys.post('/challenge', async (c) => {
     })) || [],
   })
 
-  // Store challenge for verification
-  await supabase
-    .from('challenges')
-    .upsert([{ user_id: user.id, value: options.challenge }], { onConflict: 'user_id' })
-    .select('*')
-    .maybeSingle()
+  // Store challenge for verification (upsert)
+  await query(
+    `INSERT INTO challenges (user_id, value)
+     VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET value = $2, created_at = NOW()`,
+    [user.id, options.challenge]
+  )
 
   return c.json(options)
 })
@@ -100,20 +126,18 @@ passkeys.post('/challenge', async (c) => {
 // POST /passkeys/verify - Verify passkey registration
 passkeys.post('/verify', async (c) => {
   const user = c.get('user')
-  const supabase = c.get('supabase')
   const data = await c.req.json()
   const { rpId, origin } = getWebAuthnConfig(c)
 
   // Get stored challenge
-  const { data: challenge } = await supabase
-    .from('challenges')
-    .select('*')
-    .eq('user_id', user.id)
-    .single()
+  const challenge = await queryOne<Challenge>(
+    'SELECT * FROM challenges WHERE user_id = $1',
+    [user.id]
+  )
 
   // Delete challenge (one-time use)
   if (challenge) {
-    await supabase.from('challenges').delete().eq('id', challenge.id)
+    await query('DELETE FROM challenges WHERE id = $1', [challenge.id])
   }
 
   const verificationOpts: VerifyRegistrationResponseOpts = {
@@ -139,25 +163,26 @@ passkeys.post('/verify', async (c) => {
   const { registrationInfo } = verification
 
   // Save credential to database
-  const credentialData = {
-    user_id: user.id,
-    friendly_name: `Passkey created ${new Date().toLocaleString()}`,
-    credential_type: registrationInfo?.credentialType || 'public-key',
-    credential_id: registrationInfo?.credential.id || data.id,
-    public_key: Buffer.from(registrationInfo?.credential.publicKey || []).toString('base64'),
-    aaguid: registrationInfo?.aaguid,
-    sign_count: registrationInfo?.credential.counter || 0,
-    transports: data.response?.transports || [],
-    user_verification_status: registrationInfo?.userVerified ? 'verified' : 'unverified',
-    device_type: registrationInfo?.credentialDeviceType === 'singleDevice' ? 'single_device' : 'multi_device',
-    backup_state: registrationInfo?.credentialBackedUp ? 'backed_up' : 'not_backed_up',
-  }
-
-  const { data: savedCredential } = await supabase
-    .from('credentials')
-    .insert([credentialData])
-    .select('*')
-    .maybeSingle()
+  const savedCredential = await queryRow<Credential>(
+    `INSERT INTO credentials (
+      user_id, friendly_name, credential_type, credential_id, public_key,
+      aaguid, sign_count, transports, user_verification_status, device_type, backup_state
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    RETURNING *`,
+    [
+      user.id,
+      `Passkey created ${new Date().toLocaleString()}`,
+      registrationInfo?.credentialType || 'public-key',
+      registrationInfo?.credential.id || data.id,
+      Buffer.from(registrationInfo?.credential.publicKey || []).toString('base64'),
+      registrationInfo?.aaguid,
+      registrationInfo?.credential.counter || 0,
+      data.response?.transports || [],
+      registrationInfo?.userVerified ? 'verified' : 'unverified',
+      registrationInfo?.credentialDeviceType === 'singleDevice' ? 'single_device' : 'multi_device',
+      registrationInfo?.credentialBackedUp ? 'backed_up' : 'not_backed_up',
+    ]
+  )
 
   return c.json({
     credential_id: savedCredential?.credential_id,
@@ -184,11 +209,10 @@ passkeys.post('/passkey', async (c) => {
   })
 
   // Store challenge (without user_id since user is not authenticated yet)
-  const { data: challenge } = await supabaseAdmin
-    .from('challenges')
-    .insert([{ value: options.challenge }])
-    .select('*')
-    .maybeSingle()
+  const challenge = await queryRow<Challenge>(
+    'INSERT INTO challenges (value) VALUES ($1) RETURNING *',
+    [options.challenge]
+  )
 
   return c.json({ ...options, challengeId: challenge?.id })
 })
@@ -200,23 +224,21 @@ passkeys.post('/passkey/verify', async (c) => {
   const { rpId, origin } = getWebAuthnConfig(c)
 
   // Get stored challenge
-  const { data: challenge } = await supabaseAdmin
-    .from('challenges')
-    .select('*')
-    .eq('id', challengeId)
-    .maybeSingle()
+  const challenge = await queryOne<Challenge>(
+    'SELECT * FROM challenges WHERE id = $1',
+    [challengeId]
+  )
 
   // Delete challenge (one-time use)
   if (challenge) {
-    await supabaseAdmin.from('challenges').delete().eq('id', challenge.id)
+    await query('DELETE FROM challenges WHERE id = $1', [challenge.id])
   }
 
   // Get credential from database
-  const { data: credential } = await supabaseAdmin
-    .from('credentials')
-    .select('*')
-    .eq('credential_id', data.id)
-    .maybeSingle()
+  const credential = await queryOne<Credential>(
+    'SELECT * FROM credentials WHERE credential_id = $1',
+    [data.id]
+  )
 
   if (!credential) {
     return c.json({ error: 'Credential not found' }, 404)
@@ -249,22 +271,23 @@ passkeys.post('/passkey/verify', async (c) => {
     return c.json({ error: 'Authentication failed' }, 400)
   }
 
-  // Get user from Supabase
-  const { data: userData } = await supabaseAdmin.auth.admin.getUserById(credential.user_id)
+  // Get user from database
+  const dbUser = await queryOne<DbUser>(
+    'SELECT * FROM users WHERE id = $1',
+    [credential.user_id]
+  )
 
   // Update credential's last used time and counter
-  await supabaseAdmin
-    .from('credentials')
-    .update({
-      sign_count: verification.authenticationInfo.newCounter,
-      last_used_at: new Date().toISOString(),
-    })
-    .eq('credential_id', credential.credential_id)
+  await query(
+    `UPDATE credentials SET sign_count = $1, last_used_at = NOW()
+     WHERE credential_id = $2`,
+    [verification.authenticationInfo.newCounter, credential.credential_id]
+  )
 
-  return c.json({ verified: true, user: userData?.user })
+  return c.json({ verified: true, user: dbUser })
 })
 
-// POST /auth/demo-user - Create a demo user for testing (development only)
+// POST /auth/demo-user - Create a demo user for testing
 passkeys.post('/demo-user', async (c) => {
   const { email } = await c.req.json()
 
@@ -273,24 +296,34 @@ passkeys.post('/demo-user', async (c) => {
   }
 
   // Check if user already exists
-  const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-  const existingUser = existingUsers?.users?.find((u) => u.email === email)
+  let user = await queryOne<DbUser>(
+    'SELECT * FROM users WHERE email = $1',
+    [email]
+  )
 
-  let user
-  if (existingUser) {
-    user = existingUser
-  } else {
-    // Create a new user in Supabase Auth
-    const { data: newUser, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      email_confirm: true, // Auto-confirm for demo
-      user_metadata: { display_name: 'Demo User' },
-    })
+  if (!user) {
+    // Create a new user
+    user = await queryRow<DbUser>(
+      `INSERT INTO users (id, email, display_name)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [randomUUID(), email, 'Demo User']
+    )
 
-    if (error) {
-      return c.json({ error: error.message }, 400)
+    if (!user) {
+      return c.json({ error: 'Failed to create user' }, 500)
     }
-    user = newUser.user
+
+    // Create default workspace and membership
+    const workspaceId = randomUUID()
+    await query(
+      `INSERT INTO workspaces (id, name) VALUES ($1, $2)`,
+      [workspaceId, 'Personal']
+    )
+    await query(
+      `INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, $3)`,
+      [workspaceId, user.id, 'owner']
+    )
   }
 
   // Create a session token for the user
@@ -304,11 +337,8 @@ passkeys.post('/demo-user', async (c) => {
     exp: expirationTime,
     iat: issuedAt,
     email: user.email,
-    phone: user.phone,
-    app_metadata: user.app_metadata || {},
-    user_metadata: user.user_metadata || {},
+    user_metadata: { display_name: user.display_name },
     role: 'authenticated',
-    is_anonymous: false,
   }
 
   const accessToken = jwt.sign(payload, jwtSecret, {
@@ -341,11 +371,8 @@ passkeys.post('/session', async (c) => {
     exp: expirationTime,
     iat: issuedAt,
     email: userData.email,
-    phone: userData.phone,
-    app_metadata: userData.app_metadata || {},
     user_metadata: userData.user_metadata || {},
     role: 'authenticated',
-    is_anonymous: false,
   }
 
   const accessToken = jwt.sign(payload, jwtSecret, {

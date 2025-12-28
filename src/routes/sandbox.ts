@@ -1,6 +1,26 @@
 import { Hono } from 'hono'
-import { supabaseAdmin } from '../lib/supabase'
 import { SANDBOX_WORKSPACE_ID, SANDBOX_USER_ID } from '../lib/sandbox'
+import { query } from '../lib/db'
+
+interface Note {
+  id: string
+  workspace_id: string
+  title: string
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+interface Block {
+  id: string
+  note_id: string
+  workspace_id: string
+  type: string
+  content: Record<string, unknown>
+  position: string
+  created_at: string
+  updated_at: string
+}
 
 const sandbox = new Hono()
 
@@ -8,137 +28,68 @@ const sandbox = new Hono()
 sandbox.post('/reset', async (c) => {
   try {
     // Step 1: Clear existing sandbox data
-    const { error: deleteNotesError } = await supabaseAdmin
-      .from('notes')
-      .delete()
-      .eq('workspace_id', SANDBOX_WORKSPACE_ID)
-
-    if (deleteNotesError) {
-      console.error('[SANDBOX] Error deleting notes:', deleteNotesError.message)
-    }
-
-    const { error: deleteBlocksError } = await supabaseAdmin
-      .from('blocks')
-      .delete()
-      .eq('workspace_id', SANDBOX_WORKSPACE_ID)
-
-    if (deleteBlocksError) {
-      console.error('[SANDBOX] Error deleting blocks:', deleteBlocksError.message)
-    }
+    await query('DELETE FROM notes WHERE workspace_id = $1', [SANDBOX_WORKSPACE_ID])
+    await query('DELETE FROM blocks WHERE workspace_id = $1', [SANDBOX_WORKSPACE_ID])
 
     // Step 2: Seed sample notes
-    const notesToCreate = [
-      {
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        title: 'Welcome to Sandbox',
-        created_by: SANDBOX_USER_ID,
-      },
-      {
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        title: 'Sample Todo List',
-        created_by: SANDBOX_USER_ID,
-      }
-    ]
+    const createdNotes = await query<Note>(
+      `INSERT INTO notes (workspace_id, title, created_by)
+       VALUES ($1, $2, $3), ($1, $4, $3)
+       RETURNING *`,
+      [SANDBOX_WORKSPACE_ID, 'Welcome to Sandbox', SANDBOX_USER_ID, 'Sample Todo List']
+    )
 
-    const { data: createdNotes, error: insertNotesError } = await supabaseAdmin
-      .from('notes')
-      .insert(notesToCreate)
-      .select()
-
-    if (insertNotesError || !createdNotes) {
-      return c.json({ error: insertNotesError?.message || 'Failed to create notes' }, 500)
+    if (!createdNotes || createdNotes.length < 2) {
+      return c.json({ error: 'Failed to create notes' }, 500)
     }
 
-    // Step 3: Seed blocks for each note
     const note1Id = createdNotes[0].id
     const note2Id = createdNotes[1].id
 
-    // Blocks for Note 1: Welcome to Sandbox
-    const note1Blocks = [
-      {
-        note_id: note1Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        type: 'heading',
-        content: { text: 'Welcome to the Testing Sandbox' },
-        position: '1'
-      },
-      {
-        note_id: note1Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        type: 'paragraph',
-        content: { text: 'This is a safe space to test all features without affecting real data.' },
-        position: '2'
-      },
-      {
-        note_id: note1Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        type: 'code',
-        content: { code: "console.log('Hello from sandbox!');", language: 'javascript' },
-        position: '3'
-      }
-    ]
+    // Step 3: Seed blocks for each note
+    const note1Blocks = await query<Block>(
+      `INSERT INTO blocks (note_id, workspace_id, type, content, position)
+       VALUES
+         ($1, $2, 'heading', $3, '1'),
+         ($1, $2, 'paragraph', $4, '2'),
+         ($1, $2, 'code', $5, '3')
+       RETURNING *`,
+      [
+        note1Id,
+        SANDBOX_WORKSPACE_ID,
+        JSON.stringify({ text: 'Welcome to the Testing Sandbox' }),
+        JSON.stringify({ text: 'This is a safe space to test all features without affecting real data.' }),
+        JSON.stringify({ code: "console.log('Hello from sandbox!');", language: 'javascript' }),
+      ]
+    )
 
-    // Blocks for Note 2: Sample Todo List
-    const note2Blocks = [
-      {
-        note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        type: 'heading',
-        content: { text: 'My Tasks' },
-        position: '1'
-      },
-      {
-        note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        type: 'todo',
-        content: { text: 'Try creating a new note', checked: false },
-        position: '2'
-      },
-      {
-        note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        type: 'todo',
-        content: { text: 'Edit this todo item', checked: false },
-        position: '3'
-      },
-      {
-        note_id: note2Id,
-        workspace_id: SANDBOX_WORKSPACE_ID,
-        type: 'todo',
-        content: { text: 'Delete a block', checked: false },
-        position: '4'
-      }
-    ]
-
-    // Insert blocks for note 1
-    const { data: note1BlocksData, error: note1BlocksError } = await supabaseAdmin
-      .from('blocks')
-      .insert(note1Blocks)
-      .select()
-
-    if (note1BlocksError) {
-      console.error('[SANDBOX] Error creating blocks for note 1:', note1BlocksError.message)
-    }
-
-    // Insert blocks for note 2
-    const { data: note2BlocksData, error: note2BlocksError } = await supabaseAdmin
-      .from('blocks')
-      .insert(note2Blocks)
-      .select()
-
-    if (note2BlocksError) {
-      console.error('[SANDBOX] Error creating blocks for note 2:', note2BlocksError.message)
-    }
+    const note2Blocks = await query<Block>(
+      `INSERT INTO blocks (note_id, workspace_id, type, content, position)
+       VALUES
+         ($1, $2, 'heading', $3, '1'),
+         ($1, $2, 'todo', $4, '2'),
+         ($1, $2, 'todo', $5, '3'),
+         ($1, $2, 'todo', $6, '4')
+       RETURNING *`,
+      [
+        note2Id,
+        SANDBOX_WORKSPACE_ID,
+        JSON.stringify({ text: 'My Tasks' }),
+        JSON.stringify({ text: 'Try creating a new note', checked: false }),
+        JSON.stringify({ text: 'Edit this todo item', checked: false }),
+        JSON.stringify({ text: 'Delete a block', checked: false }),
+      ]
+    )
 
     // Step 4: Return created notes with their blocks
     const notesWithBlocks = [
       {
         ...createdNotes[0],
-        blocks: note1BlocksData || []
+        blocks: note1Blocks || []
       },
       {
         ...createdNotes[1],
-        blocks: note2BlocksData || []
+        blocks: note2Blocks || []
       }
     ]
 

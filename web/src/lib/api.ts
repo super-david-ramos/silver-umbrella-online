@@ -1,15 +1,15 @@
-import { supabase } from './supabase'
+import { getToken } from './auth'
 
-async function getAuthHeaders() {
-  const { data: { session } } = await supabase.auth.getSession()
+function getAuthHeaders() {
+  const token = getToken()
   return {
-    'Authorization': `Bearer ${session?.access_token}`,
+    'Authorization': token ? `Bearer ${token}` : '',
     'Content-Type': 'application/json',
   }
 }
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers = await getAuthHeaders()
+  const headers = getAuthHeaders()
   const res = await fetch(`/api${path}`, {
     ...options,
     headers: { ...headers, ...options?.headers },

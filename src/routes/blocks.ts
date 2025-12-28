@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { z } from 'zod'
 import { authMiddleware } from '../lib/middleware'
 import type { Variables } from '../types/hono'
+import { query, queryRow } from '../lib/db'
 
 const blockTypes = ['paragraph', 'heading', 'todo', 'code', 'quote', 'list_item'] as const
 
@@ -27,30 +28,36 @@ const reorderSchema = z.object({
   })),
 })
 
+interface Block {
+  id: string
+  note_id: string
+  type: string
+  content: Record<string, unknown>
+  position: string
+  parent_id: string | null
+  workspace_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 const blocks = new Hono<{ Variables: Variables }>()
 
 blocks.use('*', authMiddleware)
 
 // Create block in note
 blocks.post('/notes/:noteId/blocks', zValidator('json', createBlockSchema), async (c) => {
-  const supabase = c.get('supabase')
   const noteId = c.req.param('noteId')
   const body = c.req.valid('json')
 
-  const { data: block, error } = await supabase
-    .from('blocks')
-    .insert({
-      note_id: noteId,
-      type: body.type,
-      content: body.content,
-      parent_id: body.parent_id,
-      position: body.position,
-    })
-    .select()
-    .single()
+  const block = await queryRow<Block>(
+    `INSERT INTO blocks (note_id, type, content, parent_id, position)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [noteId, body.type, JSON.stringify(body.content), body.parent_id ?? null, body.position]
+  )
 
-  if (error) {
-    return c.json({ error: error.message }, 500)
+  if (!block) {
+    return c.json({ error: 'Failed to create block' }, 500)
   }
 
   return c.json(block, 201)
@@ -58,21 +65,20 @@ blocks.post('/notes/:noteId/blocks', zValidator('json', createBlockSchema), asyn
 
 // Batch reorder blocks (must be before /:id to avoid route conflict)
 blocks.patch('/reorder', zValidator('json', reorderSchema), async (c) => {
-  const supabase = c.get('supabase')
   const { updates } = c.req.valid('json')
 
   // Update each block's position
   const results = await Promise.all(
     updates.map(({ id, position }) =>
-      supabase
-        .from('blocks')
-        .update({ position })
-        .eq('id', id)
+      query(
+        'UPDATE blocks SET position = $1, updated_at = NOW() WHERE id = $2',
+        [position, id]
+      )
     )
   )
 
-  const errors = results.filter((r: { error: unknown }) => r.error)
-  if (errors.length > 0) {
+  // Check if all updates succeeded (no errors thrown = success)
+  if (results.some((r) => r === null)) {
     return c.json({ error: 'Some updates failed' }, 500)
   }
 
@@ -81,19 +87,46 @@ blocks.patch('/reorder', zValidator('json', reorderSchema), async (c) => {
 
 // Update block
 blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
-  const supabase = c.get('supabase')
   const id = c.req.param('id')
   const body = c.req.valid('json')
 
-  const { data: block, error } = await supabase
-    .from('blocks')
-    .update(body)
-    .eq('id', id)
-    .select()
-    .single()
+  // Build dynamic update query
+  const updates: string[] = []
+  const values: unknown[] = []
+  let paramIndex = 1
 
-  if (error) {
-    return c.json({ error: error.message }, 500)
+  if (body.type !== undefined) {
+    updates.push(`type = $${paramIndex++}`)
+    values.push(body.type)
+  }
+  if (body.content !== undefined) {
+    updates.push(`content = $${paramIndex++}`)
+    values.push(JSON.stringify(body.content))
+  }
+  if (body.parent_id !== undefined) {
+    updates.push(`parent_id = $${paramIndex++}`)
+    values.push(body.parent_id)
+  }
+  if (body.position !== undefined) {
+    updates.push(`position = $${paramIndex++}`)
+    values.push(body.position)
+  }
+
+  if (updates.length === 0) {
+    const block = await queryRow<Block>('SELECT * FROM blocks WHERE id = $1', [id])
+    return c.json(block)
+  }
+
+  values.push(id)
+  const block = await queryRow<Block>(
+    `UPDATE blocks SET ${updates.join(', ')}, updated_at = NOW()
+     WHERE id = $${paramIndex}
+     RETURNING *`,
+    values
+  )
+
+  if (!block) {
+    return c.json({ error: 'Block not found' }, 404)
   }
 
   return c.json(block)
@@ -101,17 +134,9 @@ blocks.patch('/:id', zValidator('json', updateBlockSchema), async (c) => {
 
 // Delete block
 blocks.delete('/:id', async (c) => {
-  const supabase = c.get('supabase')
   const id = c.req.param('id')
 
-  const { error } = await supabase
-    .from('blocks')
-    .delete()
-    .eq('id', id)
-
-  if (error) {
-    return c.json({ error: error.message }, 500)
-  }
+  await query('DELETE FROM blocks WHERE id = $1', [id])
 
   return c.json({ success: true })
 })

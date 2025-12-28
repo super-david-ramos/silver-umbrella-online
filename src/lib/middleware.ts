@@ -1,8 +1,8 @@
 import { Context, Next } from 'hono'
 import jwt from 'jsonwebtoken'
-import { createSupabaseClient } from './supabase'
+import type { User } from '../types/hono'
 
-const jwtSecret = process.env.SUPABASE_AUTH_JWT_SECRET || 'your-jwt-secret'
+const jwtSecret = process.env.JWT_SECRET || 'your-jwt-secret'
 
 interface JwtPayload {
   sub: string
@@ -20,9 +20,6 @@ interface JwtPayload {
 export async function authMiddleware(c: Context, next: Next) {
   // Skip authentication if sandbox mode is active
   if (c.get('isSandbox') === true && c.get('user')) {
-    // Create a Supabase client for sandbox mode (without token)
-    const supabase = createSupabaseClient()
-    c.set('supabase', supabase)
     await next()
     return
   }
@@ -34,20 +31,7 @@ export async function authMiddleware(c: Context, next: Next) {
   }
 
   const token = authHeader.replace('Bearer ', '')
-  const supabase = createSupabaseClient(token)
 
-  // First try Supabase's getUser for real Supabase users
-  const { data: { user }, error } = await supabase.auth.getUser()
-
-  if (!error && user) {
-    c.set('user', user)
-    c.set('supabase', supabase)
-    await next()
-    return
-  }
-
-  // Fall back to JWT verification for tokens created by our session endpoint
-  // This allows demo users and passkey-authenticated users to work
   try {
     const decoded = jwt.verify(token, jwtSecret) as JwtPayload
 
@@ -56,7 +40,7 @@ export async function authMiddleware(c: Context, next: Next) {
     }
 
     // Construct a user object from JWT payload
-    const jwtUser = {
+    const user: User = {
       id: decoded.sub,
       email: decoded.email,
       phone: decoded.phone,
@@ -66,8 +50,7 @@ export async function authMiddleware(c: Context, next: Next) {
       aud: decoded.aud || 'authenticated',
     }
 
-    c.set('user', jwtUser)
-    c.set('supabase', supabase)
+    c.set('user', user)
     await next()
   } catch {
     return c.json({ error: 'Invalid or expired token' }, 401)

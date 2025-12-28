@@ -1,17 +1,16 @@
 import { Context, Next } from 'hono'
-import type { User } from '@supabase/supabase-js'
+import type { User } from '../types/hono'
 
 // Sandbox constants
 export const SANDBOX_USER_ID = 'sandbox-user-000'
 export const SANDBOX_WORKSPACE_ID = 'sandbox-workspace-000'
 
-// Sandbox user object matching Supabase User type
+// Sandbox user object
 export const SANDBOX_USER: User = {
   id: SANDBOX_USER_ID,
   email: 'sandbox@testing.local',
   aud: 'authenticated',
   role: 'authenticated',
-  created_at: '2025-01-01T00:00:00Z',
   app_metadata: { workspace_id: SANDBOX_WORKSPACE_ID },
   user_metadata: { name: 'Sandbox User' },
 }

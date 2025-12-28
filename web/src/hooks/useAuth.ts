@@ -1,56 +1,50 @@
-import { useState, useEffect } from 'react'
-import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
+import { useState, useEffect, useCallback } from 'react'
+import {
+  User,
+  getUser,
+  getToken,
+  clearSession,
+  createDemoUser,
+  isAuthenticated,
+} from '@/lib/auth'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    // Get initial session from localStorage
+    const storedUser = getUser()
+    const token = getToken()
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
-      }
-    )
-
-    return () => subscription.unsubscribe()
+    if (storedUser && token) {
+      setUser(storedUser)
+    }
+    setLoading(false)
   }, [])
 
-  const signInWithOtp = async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({ email })
-    return { error }
-  }
+  const signIn = useCallback(async (email: string) => {
+    try {
+      const session = await createDemoUser(email)
+      setUser(session.user)
+      return { error: null }
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Sign in failed') }
+    }
+  }, [])
 
-  const verifyOtp = async (email: string, token: string) => {
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    })
-    return { data, error }
-  }
-
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    return { error }
-  }
+  const signOut = useCallback(async () => {
+    clearSession()
+    setUser(null)
+    return { error: null }
+  }, [])
 
   return {
     user,
-    session,
+    session: user ? { access_token: getToken() } : null,
     loading,
-    signInWithOtp,
-    verifyOtp,
+    isAuthenticated: isAuthenticated(),
+    signIn,
     signOut,
   }
 }
