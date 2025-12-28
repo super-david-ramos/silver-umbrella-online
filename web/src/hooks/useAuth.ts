@@ -27,13 +27,7 @@ export function useAuth() {
   }, [])
 
   const signInWithOtp = async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        // Use current origin so email links work in any environment
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
+    const { error } = await supabase.auth.signInWithOtp({ email })
     return { error }
   }
 
