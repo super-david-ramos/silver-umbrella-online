@@ -23,7 +23,26 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
+export interface UserInitResponse {
+  initialized: boolean
+  created?: boolean
+  user: {
+    id: string
+    email: string
+  }
+  workspace: {
+    id: string
+    name: string
+    role: string
+  }
+  tutorialNoteId?: string
+}
+
 export const api = {
+  user: {
+    init: () => fetchApi<UserInitResponse>('/user/init', { method: 'POST' }),
+    me: () => fetchApi<{ user: any; workspace: any }>('/user/me'),
+  },
   notes: {
     list: () => fetchApi<any[]>('/notes'),
     get: (id: string) => fetchApi<any>(`/notes/${id}`),

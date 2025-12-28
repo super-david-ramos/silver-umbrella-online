@@ -42,7 +42,6 @@ notes.get('/', async (c) => {
       // Auto-initialize new user with workspace and tutorial note
       try {
         const { workspaceId: newWorkspaceId } = await initializeNewUser(
-          supabase,
           user.id,
           user.email || 'user'
         )
@@ -119,7 +118,6 @@ notes.post('/', zValidator('json', createNoteSchema), async (c) => {
       // Auto-initialize new user with workspace and tutorial note
       try {
         const { workspaceId: newWorkspaceId } = await initializeNewUser(
-          supabase,
           user.id,
           user.email || 'user'
         )

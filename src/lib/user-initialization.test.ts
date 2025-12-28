@@ -1,14 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { initializeNewUser, DEFAULT_TUTORIAL_NOTE } from './user-initialization'
+import { DEFAULT_TUTORIAL_NOTE } from './user-initialization'
+
+// Use vi.hoisted to ensure mocks are defined before vi.mock runs
+const { mockSupabaseAdmin } = vi.hoisted(() => ({
+  mockSupabaseAdmin: {
+    from: vi.fn(),
+  }
+}))
+
+vi.mock('./supabase', () => ({
+  supabaseAdmin: mockSupabaseAdmin
+}))
+
+// Import after mocking
+import { initializeNewUser } from './user-initialization'
 
 describe('User Initialization', () => {
-  let mockSupabase: any
-
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSupabase = {
-      from: vi.fn(),
-    }
+    mockSupabaseAdmin.from.mockReset()
   })
 
   describe('initializeNewUser', () => {
@@ -18,7 +28,7 @@ describe('User Initialization', () => {
       const workspaceId = 'ws-new-123'
 
       // Mock workspace insert
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -28,12 +38,12 @@ describe('User Initialization', () => {
       })
 
       // Mock workspace_members insert
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockResolvedValue({ error: null }),
       })
 
       // Mock notes insert (tutorial note)
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -43,18 +53,18 @@ describe('User Initialization', () => {
       })
 
       // Mock blocks insert (tutorial content)
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockResolvedValue({ error: null }),
       })
 
-      const result = await initializeNewUser(mockSupabase, userId, userEmail)
+      const result = await initializeNewUser(userId, userEmail)
 
       expect(result.workspaceId).toBe(workspaceId)
       expect(result.tutorialNoteId).toBe('note-1')
-      expect(mockSupabase.from).toHaveBeenCalledWith('workspaces')
-      expect(mockSupabase.from).toHaveBeenCalledWith('workspace_members')
-      expect(mockSupabase.from).toHaveBeenCalledWith('notes')
-      expect(mockSupabase.from).toHaveBeenCalledWith('blocks')
+      expect(mockSupabaseAdmin.from).toHaveBeenCalledWith('workspaces')
+      expect(mockSupabaseAdmin.from).toHaveBeenCalledWith('workspace_members')
+      expect(mockSupabaseAdmin.from).toHaveBeenCalledWith('notes')
+      expect(mockSupabaseAdmin.from).toHaveBeenCalledWith('blocks')
     })
 
     it('creates a tutorial note with welcome content', async () => {
@@ -67,7 +77,7 @@ describe('User Initialization', () => {
       let capturedBlocksInsert: any = null
 
       // Mock workspace insert
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -77,12 +87,12 @@ describe('User Initialization', () => {
       })
 
       // Mock workspace_members insert
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockResolvedValue({ error: null }),
       })
 
       // Mock notes insert - capture what was inserted
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn((data) => {
           capturedNoteInsert = data
           return {
@@ -96,14 +106,14 @@ describe('User Initialization', () => {
       })
 
       // Mock blocks insert - capture what was inserted
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn((data) => {
           capturedBlocksInsert = data
           return Promise.resolve({ error: null })
         }),
       })
 
-      await initializeNewUser(mockSupabase, userId, userEmail)
+      await initializeNewUser(userId, userEmail)
 
       // Verify the note has tutorial title
       expect(capturedNoteInsert.title).toBe(DEFAULT_TUTORIAL_NOTE.title)
@@ -120,7 +130,7 @@ describe('User Initialization', () => {
       const userId = 'new-user-123'
       const userEmail = 'new@example.com'
 
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -129,7 +139,7 @@ describe('User Initialization', () => {
         }),
       })
 
-      await expect(initializeNewUser(mockSupabase, userId, userEmail)).rejects.toThrow(
+      await expect(initializeNewUser(userId, userEmail)).rejects.toThrow(
         'Failed to create workspace'
       )
     })
@@ -138,7 +148,7 @@ describe('User Initialization', () => {
       const userId = 'new-user-123'
       const userEmail = 'new@example.com'
 
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({
@@ -147,13 +157,13 @@ describe('User Initialization', () => {
         }),
       })
 
-      mockSupabase.from.mockReturnValueOnce({
+      mockSupabaseAdmin.from.mockReturnValueOnce({
         insert: vi.fn().mockResolvedValue({
           error: { message: 'Member creation failed' },
         }),
       })
 
-      await expect(initializeNewUser(mockSupabase, userId, userEmail)).rejects.toThrow(
+      await expect(initializeNewUser(userId, userEmail)).rejects.toThrow(
         'Failed to add user to workspace'
       )
     })

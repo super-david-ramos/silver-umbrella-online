@@ -4,6 +4,7 @@ import notes from './routes/notes'
 import blocks from './routes/blocks'
 import passkeys from './routes/passkeys'
 import sandbox from './routes/sandbox'
+import user from './routes/user'
 import { authMiddleware } from './lib/middleware'
 import { sandboxMiddleware } from './lib/sandbox'
 
@@ -25,10 +26,12 @@ app.route('/api/auth', passkeys)
 app.use('/api/notes/*', sandboxMiddleware, authMiddleware)
 app.use('/api/blocks/*', sandboxMiddleware, authMiddleware)
 app.use('/api/passkeys/*', authMiddleware)
+app.use('/api/user/*', authMiddleware)
 
 app.route('/api/notes', notes)
 app.route('/api/blocks', blocks)
 app.route('/api/passkeys', passkeys)
 app.route('/api/sandbox', sandbox)
+app.route('/api/user', user)
 
 export default app
