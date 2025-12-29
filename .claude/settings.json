@@ -3,11 +3,11 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "",
+        "matcher": "startup",
         "hooks": [
           {
             "type": "command",
-            "command": "git submodule update --init --recursive"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/install_pkgs.sh"
           }
         ]
       }
