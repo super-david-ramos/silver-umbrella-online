@@ -79,7 +79,14 @@ function AuthHashHandler({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, workspaceReady } = useAuthContext()
+  const { user, loading, workspaceReady, initError, retryInit } = useAuthContext()
+  const [retrying, setRetrying] = useState(false)
+
+  const handleRetry = async () => {
+    setRetrying(true)
+    await retryInit()
+    setRetrying(false)
+  }
 
   if (loading || (user && !workspaceReady)) {
     return (
@@ -91,6 +98,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  // Show error state if workspace initialization failed
+  if (initError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+        <div className="w-full max-w-sm space-y-6 text-center">
+          <div className="p-4 rounded-md bg-destructive/10 text-destructive">
+            <h2 className="font-semibold mb-2">Setup Failed</h2>
+            <p className="text-sm">{initError}</p>
+          </div>
+          <button
+            onClick={handleRetry}
+            disabled={retrying}
+            className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+          >
+            {retrying ? 'Retrying...' : 'Try Again'}
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return <>{children}</>

@@ -1,32 +1,54 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
+
+const MAX_INIT_RETRIES = 3
+const RETRY_DELAY_MS = 1000
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [workspaceReady, setWorkspaceReady] = useState(false)
+  const [initError, setInitError] = useState<string | null>(null)
   const initializingRef = useRef(false)
+  const currentAccessTokenRef = useRef<string | null>(null)
 
   // Initialize user workspace when session is available
-  const initializeUser = async () => {
-    if (initializingRef.current) return
+  // Pass accessToken directly to avoid race condition with getSession()
+  const initializeUser = useCallback(async (accessToken: string, retryCount = 0) => {
+    if (initializingRef.current && currentAccessTokenRef.current === accessToken) return
     initializingRef.current = true
+    currentAccessTokenRef.current = accessToken
+    setInitError(null)
 
     try {
-      const result = await api.user.init()
+      const result = await api.user.init(accessToken)
       console.log('User initialized:', result.created ? 'new workspace created' : 'existing workspace')
       setWorkspaceReady(true)
+      setInitError(null)
     } catch (error) {
-      console.error('Failed to initialize user:', error)
-      // Still set ready so the app can show error state
+      console.error(`Failed to initialize user (attempt ${retryCount + 1}/${MAX_INIT_RETRIES}):`, error)
+
+      // Retry with exponential backoff
+      if (retryCount < MAX_INIT_RETRIES - 1) {
+        const delay = RETRY_DELAY_MS * Math.pow(2, retryCount)
+        console.log(`Retrying in ${delay}ms...`)
+        initializingRef.current = false
+        await new Promise(resolve => setTimeout(resolve, delay))
+        return initializeUser(accessToken, retryCount + 1)
+      }
+
+      // All retries failed
+      const errorMessage = error instanceof Error ? error.message : 'Failed to initialize workspace'
+      setInitError(errorMessage)
+      // Set workspaceReady to true so the app can show the error state
       setWorkspaceReady(true)
     } finally {
       initializingRef.current = false
     }
-  }
+  }, [])
 
   useEffect(() => {
     // Get initial session
@@ -36,8 +58,8 @@ export function useAuth() {
       setLoading(false)
 
       // Initialize user if we have a session
-      if (session?.user) {
-        initializeUser()
+      if (session?.access_token) {
+        initializeUser(session.access_token)
       }
     })
 
@@ -48,17 +70,19 @@ export function useAuth() {
         setUser(session?.user ?? null)
 
         // Initialize user on sign in
-        if (session?.user) {
+        if (session?.access_token) {
           setWorkspaceReady(false)
-          initializeUser()
+          setInitError(null)
+          initializeUser(session.access_token)
         } else {
           setWorkspaceReady(false)
+          setInitError(null)
         }
       }
     )
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [initializeUser])
 
   const signInWithOtp = async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
@@ -84,13 +108,24 @@ export function useAuth() {
     return { error }
   }
 
+  // Retry initialization - useful when init fails
+  const retryInit = useCallback(async () => {
+    if (session?.access_token) {
+      setWorkspaceReady(false)
+      setInitError(null)
+      await initializeUser(session.access_token)
+    }
+  }, [session, initializeUser])
+
   return {
     user,
     session,
     loading,
     workspaceReady,
+    initError,
     signInWithOtp,
     verifyOtp,
     signOut,
+    retryInit,
   }
 }

@@ -1,6 +1,12 @@
 import { supabase } from './supabase'
 
-async function getAuthHeaders() {
+async function getAuthHeaders(accessToken?: string) {
+  if (accessToken) {
+    return {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    }
+  }
   const { data: { session } } = await supabase.auth.getSession()
   return {
     'Authorization': `Bearer ${session?.access_token}`,
@@ -8,11 +14,16 @@ async function getAuthHeaders() {
   }
 }
 
-async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers = await getAuthHeaders()
+interface FetchApiOptions extends RequestInit {
+  accessToken?: string
+}
+
+async function fetchApi<T>(path: string, options?: FetchApiOptions): Promise<T> {
+  const { accessToken, ...restOptions } = options || {}
+  const headers = await getAuthHeaders(accessToken)
   const res = await fetch(`/api${path}`, {
-    ...options,
-    headers: { ...headers, ...options?.headers },
+    ...restOptions,
+    headers: { ...headers, ...restOptions?.headers },
   })
 
   if (!res.ok) {
@@ -40,7 +51,7 @@ export interface UserInitResponse {
 
 export const api = {
   user: {
-    init: () => fetchApi<UserInitResponse>('/user/init', { method: 'POST' }),
+    init: (accessToken?: string) => fetchApi<UserInitResponse>('/user/init', { method: 'POST', accessToken }),
     me: () => fetchApi<{ user: any; workspace: any }>('/user/me'),
   },
   notes: {
